@@ -1,0 +1,113 @@
+{
+  "_comment": "Sample product definitions. Encode ONE object (the JSON inside the 'products' array, not the whole file) into each QR code sticker. See qr-generation-guide.md.",
+  "products": [
+    {
+      "productId": "banana_001",
+      "name": "Banana",
+      "category": "Fruit",
+      "brand": "Generic",
+      "expiryDate": "2026-05-20",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 150,
+      "weightMin": 100,
+      "weightMax": 180,
+      "storageType": "Cool"
+    },
+    {
+      "productId": "apple_001",
+      "name": "Apple",
+      "category": "Fruit",
+      "brand": "Generic",
+      "expiryDate": "2026-06-05",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 180,
+      "weightMin": 140,
+      "weightMax": 220,
+      "storageType": "Cool"
+    },
+    {
+      "productId": "tomato_001",
+      "name": "Tomato",
+      "category": "Vegetable",
+      "brand": "Generic",
+      "expiryDate": "2026-05-24",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 120,
+      "weightMin": 90,
+      "weightMax": 160,
+      "storageType": "Cool"
+    },
+    {
+      "productId": "cucumber_001",
+      "name": "Cucumber",
+      "category": "Vegetable",
+      "brand": "Generic",
+      "expiryDate": "2026-05-23",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 200,
+      "weightMin": 150,
+      "weightMax": 260,
+      "storageType": "Cool"
+    },
+    {
+      "productId": "milk_001",
+      "name": "Milk",
+      "category": "Dairy",
+      "brand": "Example Brand",
+      "expiryDate": "2026-05-25",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 1000,
+      "weightMin": 900,
+      "weightMax": 1100,
+      "storageType": "Cold"
+    },
+    {
+      "productId": "yogurt_001",
+      "name": "Yogurt Cup",
+      "category": "Dairy",
+      "brand": "Example Brand",
+      "expiryDate": "2026-05-28",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 200,
+      "weightMin": 180,
+      "weightMax": 220,
+      "storageType": "Cold"
+    },
+    {
+      "productId": "cheese_001",
+      "name": "Cheese Package",
+      "category": "Dairy",
+      "brand": "Example Brand",
+      "expiryDate": "2026-06-15",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 400,
+      "weightMin": 360,
+      "weightMax": 440,
+      "storageType": "Cold"
+    },
+    {
+      "productId": "egg_001",
+      "name": "Egg Box",
+      "category": "Egg",
+      "brand": "Generic",
+      "expiryDate": "2026-06-01",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 600,
+      "weightMin": 480,
+      "weightMax": 660,
+      "storageType": "Cold"
+    },
+    {
+      "productId": "packaged_001",
+      "name": "Packaged Food",
+      "category": "Packaged Food",
+      "brand": "Example Brand",
+      "expiryDate": "2026-09-30",
+      "addedDate": "2026-05-17",
+      "expectedWeight": 350,
+      "weightMin": 330,
+      "weightMax": 370,
+      "storageType": "Ambient"
+    }
+  ]
+}
