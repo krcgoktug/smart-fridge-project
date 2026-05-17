@@ -1,0 +1,36 @@
+# ---- Secrets / config ----
+*.env
+.env
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+**/secrets.h
+**/wifi_config.h
+
+# ---- Flutter / Dart ----
+mobile/smart_fridge_app/.dart_tool/
+mobile/smart_fridge_app/.flutter-plugins
+mobile/smart_fridge_app/.flutter-plugins-dependencies
+mobile/smart_fridge_app/.packages
+mobile/smart_fridge_app/build/
+mobile/smart_fridge_app/.pub-cache/
+mobile/smart_fridge_app/.pub/
+mobile/smart_fridge_app/android/.gradle/
+mobile/smart_fridge_app/ios/Pods/
+mobile/smart_fridge_app/**/GeneratedPluginRegistrant.*
+
+# ---- Python backend ----
+backend/**/__pycache__/
+backend/**/.venv/
+backend/**/venv/
+*.pyc
+
+# ---- Arduino ----
+firmware/**/build/
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.iml
