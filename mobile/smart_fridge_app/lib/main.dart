@@ -82,7 +82,14 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: Column(
+        children: <Widget>[
+          if (FirebaseService.demoMode) const _DemoBanner(),
+          Expanded(
+            child: IndexedStack(index: _index, children: _screens),
+          ),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (int i) => setState(() => _index = i),
@@ -108,6 +115,37 @@ class _HomeShellState extends State<HomeShell> {
               selectedIcon: Icon(Icons.settings),
               label: 'Settings'),
         ],
+      ),
+    );
+  }
+}
+
+/// Thin strip shown when the app runs on built-in demo data.
+class _DemoBanner extends StatelessWidget {
+  const _DemoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFFFF3CD),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          child: Row(
+            children: const <Widget>[
+              Icon(Icons.info_outline, size: 16, color: Color(0xFF8A6D00)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Demo mode - sample data. Run "flutterfire configure" '
+                  'to connect your own Firebase project.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF8A6D00)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

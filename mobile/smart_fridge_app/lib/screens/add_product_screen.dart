@@ -153,8 +153,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ),
         ],
       ),
-      body: FirebaseService.ready
-          ? Column(
+      body: Column(
               children: <Widget>[
                 Expanded(
                   child: Stack(
@@ -185,8 +184,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                 ),
               ],
-            )
-          : const _NoFirebaseFallback(),
+            ),
     );
   }
 }
@@ -274,25 +272,6 @@ class _ConfirmSheet extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _NoFirebaseFallback extends StatelessWidget {
-  const _NoFirebaseFallback();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(28),
-        child: Text(
-          'Firebase is not configured, so scanned products cannot be '
-          'saved. Run "flutterfire configure" first.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.black54),
-        ),
       ),
     );
   }

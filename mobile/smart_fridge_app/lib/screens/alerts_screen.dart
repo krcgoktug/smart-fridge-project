@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../models/alert.dart';
 import '../services/firebase_service.dart';
 import '../utils/status_colors.dart';
-import '../widgets/firebase_notice.dart';
 
 /// Screen 6 - Alerts.
 class AlertsScreen extends StatelessWidget {
@@ -14,9 +13,7 @@ class AlertsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Alerts')),
-      body: FirebaseService.ready
-          ? const _AlertsBody()
-          : const FirebaseNotice(),
+      body: const _AlertsBody(),
     );
   }
 }

@@ -4,7 +4,6 @@ import '../models/product.dart';
 import '../models/sensor_data.dart';
 import '../services/firebase_service.dart';
 import '../services/risk_service.dart';
-import '../widgets/firebase_notice.dart';
 import '../widgets/product_card.dart';
 import 'add_product_screen.dart';
 import 'product_detail_screen.dart';
@@ -24,9 +23,7 @@ class ProductListScreen extends StatelessWidget {
         ),
         child: const Icon(Icons.add),
       ),
-      body: FirebaseService.ready
-          ? const _ProductListBody()
-          : const FirebaseNotice(),
+      body: const _ProductListBody(),
     );
   }
 }

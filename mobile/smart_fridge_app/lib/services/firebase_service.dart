@@ -2,58 +2,47 @@ import 'package:firebase_database/firebase_database.dart';
 
 import '../app_config.dart';
 import '../models/alert.dart';
+import '../models/camera_info.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
+import 'demo_data.dart';
 
-/// Camera endpoint URLs published under `/devices/<id>/camera`.
-class CameraInfo {
-  CameraInfo({this.streamUrl, this.captureUrl});
-  final String? streamUrl;
-  final String? captureUrl;
-
-  bool get hasUrls => (captureUrl != null && captureUrl!.isNotEmpty);
-
-  factory CameraInfo.fromMap(Map<dynamic, dynamic>? map) {
-    if (map == null) return CameraInfo();
-    return CameraInfo(
-      streamUrl: map['streamUrl']?.toString(),
-      captureUrl: map['captureUrl']?.toString(),
-    );
-  }
-}
-
-/// Thin wrapper over Firebase Realtime Database for this device.
+/// Data access layer for the app.
 ///
-/// [ready] is set by `main.dart` after a successful `Firebase.initializeApp`.
-/// When it is false (placeholder config / offline), the screens show a
-/// "Firebase not configured" hint instead of crashing.
+/// When [ready] is true it talks to Firebase Realtime Database. When it is
+/// false (placeholder config / no Firebase project) it transparently falls
+/// back to [DemoRepository], so every screen is fully usable with realistic
+/// sample data. Callers do not need to know which mode is active.
 class FirebaseService {
-  /// True once Firebase initialised successfully.
+  /// True once Firebase initialised against a real project.
   static bool ready = false;
+
+  /// True when the app is running on built-in demo data.
+  static bool get demoMode => !ready;
+
+  static DemoRepository get _demo => DemoRepository.instance;
 
   static DatabaseReference get _root =>
       FirebaseDatabase.instance.ref(AppConfig.deviceRoot);
 
   // --- Streams ---------------------------------------------------------------
 
-  /// Live environmental sensor data.
   static Stream<SensorData> sensorStream() {
+    if (demoMode) return _demo.sensorStream();
     return _root.child('sensors').onValue.map(
-          (DatabaseEvent e) =>
-              SensorData.fromMap(_asMap(e.snapshot.value)),
+          (DatabaseEvent e) => SensorData.fromMap(_asMap(e.snapshot.value)),
         );
   }
 
-  /// Live camera endpoint info.
   static Stream<CameraInfo> cameraStream() {
+    if (demoMode) return _demo.cameraStream();
     return _root.child('camera').onValue.map(
-          (DatabaseEvent e) =>
-              CameraInfo.fromMap(_asMap(e.snapshot.value)),
+          (DatabaseEvent e) => CameraInfo.fromMap(_asMap(e.snapshot.value)),
         );
   }
 
-  /// Live list of products.
   static Stream<List<Product>> productsStream() {
+    if (demoMode) return _demo.productsStream();
     return _root.child('products').onValue.map((DatabaseEvent e) {
       final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
       if (map == null) return <Product>[];
@@ -66,8 +55,8 @@ class FirebaseService {
     });
   }
 
-  /// Live list of alerts, newest first.
   static Stream<List<Alert>> alertsStream() {
+    if (demoMode) return _demo.alertsStream();
     return _root.child('alerts').onValue.map((DatabaseEvent e) {
       final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
       if (map == null) return <Alert>[];
@@ -83,14 +72,20 @@ class FirebaseService {
 
   // --- Writes ----------------------------------------------------------------
 
-  /// Create or overwrite a product (used after a QR scan).
   static Future<void> saveProduct(Product product) async {
     product.remainingHours ??= product.hoursUntilExpiry();
+    if (demoMode) {
+      _demo.saveProduct(product);
+      return;
+    }
     await _root.child('products/${product.productId}').set(product.toMap());
   }
 
-  /// Update only the dynamic fields of a product after a risk recompute.
   static Future<void> updateProductRisk(Product product) async {
+    if (demoMode) {
+      _demo.saveProduct(product);
+      return;
+    }
     await _root.child('products/${product.productId}').update(<String, dynamic>{
       'riskScore': product.riskScore,
       'status': product.status,
@@ -103,12 +98,19 @@ class FirebaseService {
   }
 
   static Future<void> deleteProduct(String productId) async {
+    if (demoMode) {
+      _demo.deleteProduct(productId);
+      return;
+    }
     await _root.child('products/$productId').remove();
   }
 
-  /// Push a new alert.
   static Future<void> addAlert(String message, String severity,
       {String? productId}) async {
+    if (demoMode) {
+      _demo.addAlert(message, severity, productId: productId);
+      return;
+    }
     final DatabaseReference ref = _root.child('alerts').push();
     await ref.set(<String, dynamic>{
       'message': message,
@@ -119,6 +121,10 @@ class FirebaseService {
   }
 
   static Future<void> deleteAlert(String alertId) async {
+    if (demoMode) {
+      _demo.deleteAlert(alertId);
+      return;
+    }
     await _root.child('alerts/$alertId').remove();
   }
 

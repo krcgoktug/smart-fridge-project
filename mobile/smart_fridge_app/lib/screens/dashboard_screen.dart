@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../models/alert.dart';
+import '../models/camera_info.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import '../services/firebase_service.dart';
 import '../services/risk_service.dart';
 import '../utils/status_colors.dart';
-import '../widgets/firebase_notice.dart';
 import '../widgets/sensor_card.dart';
 import '../widgets/status_badge.dart';
 import 'add_product_screen.dart';
@@ -27,9 +27,7 @@ class DashboardScreen extends StatelessWidget {
         icon: const Icon(Icons.qr_code_scanner),
         label: const Text('Add Product'),
       ),
-      body: FirebaseService.ready
-          ? const _DashboardBody()
-          : const FirebaseNotice(),
+      body: const _DashboardBody(),
     );
   }
 }

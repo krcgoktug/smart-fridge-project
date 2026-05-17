@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/camera_info.dart';
 import '../services/firebase_service.dart';
-import '../widgets/firebase_notice.dart';
 
 /// Screen 5 - Camera View.
 ///
@@ -56,9 +56,7 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
           ),
         ],
       ),
-      body: FirebaseService.ready
-          ? _body()
-          : const FirebaseNotice(),
+      body: _body(),
     );
   }
 
