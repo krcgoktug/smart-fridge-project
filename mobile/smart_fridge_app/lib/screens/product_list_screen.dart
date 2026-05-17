@@ -44,7 +44,9 @@ class _ProductListBody extends StatelessWidget {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            final List<Product> products = snap.data ?? <Product>[];
+            // Copy: the stream may hand back an unmodifiable list.
+            final List<Product> products =
+                List<Product>.of(snap.data ?? <Product>[]);
             if (products.isEmpty) {
               return const _EmptyProducts();
             }
