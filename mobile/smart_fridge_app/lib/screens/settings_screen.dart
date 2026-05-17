@@ -25,7 +25,7 @@ class SettingsScreen extends StatelessWidget {
                 valueColor:
                     ready ? StatusColors.fresh : StatusColors.spoilage,
               ),
-              _Row(label: 'Device ID', value: AppConfig.deviceId),
+              const _Row(label: 'Device ID', value: AppConfig.deviceId),
               _Row(
                   label: 'Database path',
                   value: '/${AppConfig.deviceRoot}'),
@@ -46,9 +46,9 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
             ),
-          _Card(
+          const _Card(
             title: 'Hardware',
-            children: const <Widget>[
+            children: <Widget>[
               _Row(label: 'Box dimensions',
                   value: AppConfig.boxDimensions),
               _Row(label: 'Sensor node', value: 'ESP32 DevKit V1'),
@@ -58,17 +58,17 @@ class SettingsScreen extends StatelessWidget {
                   value: 'DHT11, MQ135, HX711 + 4 load cells'),
             ],
           ),
-          _Card(
+          const _Card(
             title: 'Risk model',
-            children: const <Widget>[
+            children: <Widget>[
               _Row(label: 'Fresh', value: 'score 0 - 39'),
               _Row(label: 'Consume Soon', value: 'score 40 - 69'),
               _Row(label: 'Spoilage Risk', value: 'score 70 - 100'),
             ],
           ),
-          _Card(
+          const _Card(
             title: 'Database structure',
-            children: const <Widget>[
+            children: <Widget>[
               _Row(label: 'sensors', value: 'temp, humidity, gas, weight'),
               _Row(label: 'camera', value: 'streamUrl, captureUrl'),
               _Row(label: 'products', value: 'QR + risk per product'),

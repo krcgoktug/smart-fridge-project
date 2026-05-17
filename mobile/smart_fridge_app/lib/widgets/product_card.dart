@@ -71,7 +71,7 @@ class ProductCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     Row(
                       children: <Widget>[
-                        Icon(Icons.schedule,
+                        const Icon(Icons.schedule,
                             size: 13, color: Colors.black45),
                         const SizedBox(width: 4),
                         Text(

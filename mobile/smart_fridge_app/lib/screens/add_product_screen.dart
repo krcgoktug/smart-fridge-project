@@ -138,9 +138,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
             tooltip: 'Enter manually',
             icon: const Icon(Icons.edit_note),
             onPressed: () async {
+              final NavigatorState nav = Navigator.of(context);
               await _controller.stop();
               if (!mounted) return;
-              final Product? p = await Navigator.of(context).push(
+              final Product? p = await nav.push(
                 MaterialPageRoute<Product>(
                     builder: (_) => const _ManualEntryForm()),
               );
@@ -355,6 +356,7 @@ class _ManualEntryFormState extends State<_ManualEntryForm> {
             _field(_id, 'Product ID', hint: 'e.g. banana_001'),
             _field(_name, 'Name'),
             DropdownButtonFormField<String>(
+              // ignore: deprecated_member_use
               value: _category,
               decoration: const InputDecoration(
                 labelText: 'Category',

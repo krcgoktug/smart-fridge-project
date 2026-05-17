@@ -33,8 +33,6 @@ class DemoRepository {
   final StreamController<List<Alert>> _alertsCtrl =
       StreamController<List<Alert>>.broadcast();
 
-  Timer? _sensorTimer;
-
   void _seed() {
     final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -140,7 +138,9 @@ class DemoRepository {
     ]);
 
     // Gently drift the sensor values so the dashboard feels alive.
-    _sensorTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // The repository is an app-lifetime singleton, so this timer is never
+    // cancelled by design.
+    Timer.periodic(const Duration(seconds: 5), (_) {
       final int tick = DateTime.now().second;
       _sensors = SensorData(
         temperature: 5.5 + (tick % 5) * 0.2,

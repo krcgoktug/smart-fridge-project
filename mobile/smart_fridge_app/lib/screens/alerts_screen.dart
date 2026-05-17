@@ -31,10 +31,10 @@ class _AlertsBody extends StatelessWidget {
         }
         final List<Alert> alerts = snap.data ?? <Alert>[];
         if (alerts.isEmpty) {
-          return Center(
+          return const Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: const <Widget>[
+              children: <Widget>[
                 Icon(Icons.notifications_off_outlined,
                     size: 60, color: Colors.black26),
                 SizedBox(height: 12),

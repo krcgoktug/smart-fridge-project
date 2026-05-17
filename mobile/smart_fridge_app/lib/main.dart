@@ -126,14 +126,14 @@ class _DemoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFFFF3CD),
+    return const Material(
+      color: Color(0xFFFFF3CD),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
-            children: const <Widget>[
+            children: <Widget>[
               Icon(Icons.info_outline, size: 16, color: Color(0xFF8A6D00)),
               SizedBox(width: 8),
               Expanded(

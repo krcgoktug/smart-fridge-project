@@ -40,18 +40,15 @@ lib/
 
 ## Setup
 
-This repository commits only the Dart source (`lib/`) and `pubspec.yaml`.
-Generate the platform folders (android/ios/web) on first checkout:
+The `android/` and `web/` platform folders are committed, so the app is
+runnable straight after cloning:
 
 ```bash
 cd mobile/smart_fridge_app
-
-# 1. Generate platform scaffolding WITHOUT touching lib/ or pubspec.yaml
-flutter create --platforms=android,ios,web .
-
-# 2. Fetch dependencies
 flutter pub get
 ```
+
+> iOS is not committed. To add it: `flutter create --platforms=ios .`
 
 ### Firebase configuration
 
@@ -106,6 +103,6 @@ reflects current conditions.
 | Symptom | Fix |
 |---------|-----|
 | "Firebase not configured" everywhere | Run `flutterfire configure`, restart |
-| Build fails: no android/ios folder | Run `flutter create --platforms=android,ios,web .` |
+| Build fails: no ios folder | Run `flutter create --platforms=ios .` |
 | QR scanner is black | Use a real device; grant camera permission |
 | Camera preview fails | Phone must be on the same Wi-Fi as the ESP32-CAM |
