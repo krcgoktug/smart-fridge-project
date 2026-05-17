@@ -68,16 +68,14 @@ The Flutter app is auto-deployed to **GitHub Pages** on every push to `main`
 via [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml).
 Anyone can open it from a phone or laptop browser — no install needed:
 
-**https://ezgerdog.github.io/smart-fridge-project/**
+**https://krcgoktug.github.io/smart-fridge-project/**
 
 The deployed build runs in **demo mode** (built-in sample data), so it works
 fully without any Firebase setup — ideal for presentations.
 
-> **One-time setup (repo admin only):** in the repository,
-> **Settings -> Pages -> Build and deployment -> Source** must be set to
-> **GitHub Actions**. After that, every push deploys automatically. The
-> workflow can also be run manually from the **Actions** tab
-> ("Deploy web app to GitHub Pages" -> "Run workflow").
+> GitHub Pages source is set to **GitHub Actions**, so every push to `main`
+> redeploys automatically. The workflow can also be run manually from the
+> **Actions** tab ("Deploy web app to GitHub Pages" -> "Run workflow").
 
 ## Repository structure
 
