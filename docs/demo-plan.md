@@ -68,8 +68,9 @@ Show the physical box (47 x 72.5 x 36.2 cm) with the two ESP32 boards.
 ## Fallback plan (if hardware/Wi-Fi fails)
 
 - Use a **second phone or browser** as a hotspot so all devices share a network.
-- If a sensor board is offline: the app still works against Firebase — manually
-  seed `/sensors` with sample values from `docs/firebase-schema.json`.
+- If a sensor board is offline: the app still works against Firebase — import
+  `docs/demo-seed.json` at the database root (Realtime Database -> three-dot
+  menu -> Import JSON) to populate sensors, camera, products and alerts.
 - If the camera is offline: use a pre-captured banana image with the Python
   backend in file mode.
 - Keep screen recordings of a successful run as a last-resort backup.
