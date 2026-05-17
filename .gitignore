@@ -3,9 +3,14 @@
 .env
 **/google-services.json
 **/GoogleService-Info.plist
-**/firebase_options.dart
 **/secrets.h
+**/cam_secrets.h
 **/wifi_config.h
+
+# NOTE: lib/firebase_options.dart is committed with PLACEHOLDER values so the
+# app always compiles. Replace it locally via `flutterfire configure`.
+# Firebase client config is not a server secret, but do not commit a config
+# tied to a production project.
 
 # ---- Flutter / Dart ----
 mobile/smart_fridge_app/.dart_tool/
