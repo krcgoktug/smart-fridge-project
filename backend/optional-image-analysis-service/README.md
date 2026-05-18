@@ -70,12 +70,31 @@ curl -X POST http://localhost:5000/analyze \
 
 Add `?write=false` to the `/analyze` URL to skip the Firebase write-back.
 
+## Automatic product registration (optional)
+
+The backend can also drive the **automatic registration** flow — the same job
+the Flutter app does. When the ESP32 DevKit reports a weight event on
+`/detection`, it fetches the ESP32-CAM image, decodes the QR code (OpenCV,
+`cv2.QRCodeDetector`), saves the product, and resets the detection flag.
+
+```bash
+# Watch /detection and auto-register products as they are placed
+python app.py --auto
+
+# Capture once, decode the QR and register the product immediately
+python app.py --register-once
+```
+
+Use the app's listener **or** the backend `--auto` loop — not both at once,
+or they will race to register the same product.
+
 ## Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/health` | Liveness check + configured capture URL |
 | POST | `/analyze` | Analyze the current camera image for a product |
+| POST | `/auto-register` | Capture, decode the QR code and register the product |
 
 ## Notes
 

@@ -13,7 +13,9 @@ goes bad.
 ## What it does
 
 - Reads environmental sensors (temperature, humidity, gas, weight) inside the box.
-- Identifies products via **QR code stickers** scanned by the mobile app.
+- **Registers products automatically**: placing an item on the load-cell
+  platform triggers a weight event, the ESP32-CAM captures its QR code, and
+  the product is added with no button press (manual scan stays as a backup).
 - Captures product images with an ESP32-CAM for **banana browning detection**.
 - Combines all signals into a **risk score (0-100)** and a status:
   - `Fresh` (0-39)

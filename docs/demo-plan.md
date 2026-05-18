@@ -33,13 +33,24 @@ Show the physical box (47 x 72.5 x 36.2 cm) with the two ESP32 boards.
    value rise and the global risk score react.
 4. Add an item to the box — show the total weight change on the dashboard.
 
-## 3. QR product registration (2 min)
+## 3. Automatic product registration (2 min)
 
-1. Open **Add Product / QR Scan**.
-2. Scan the banana QR sticker.
-3. Show the parsed JSON fields, confirm, and save.
-4. Switch to **Product List** — the banana now appears with category, expiry
-   date, remaining time and a colored status badge.
+1. Open the **Dashboard** — point out the **Automatic product detection**
+   card ("Listening — place a product on the scale").
+2. Place the banana (with its QR sticker facing the camera) on the load-cell
+   platform.
+3. The ESP32 DevKit detects the stable weight increase and writes a detection
+   event; the app captures the ESP32-CAM image, decodes the QR code, and
+   registers the product — all automatically. Watch the snackbars:
+   "detected → registering → registered".
+4. Switch to **Product List** — the banana appears on its own with category,
+   expiry date, remaining time and a colored status badge.
+5. (Backup) Mention the **Manual Scan (Backup)** button — used only if a QR
+   code cannot be read automatically.
+
+> Demo without hardware: on the deployed web app, use the
+> **"Simulate product on scale"** button on the Dashboard — it runs the exact
+> same automatic flow with sample data.
 
 ## 4. Camera + banana browning (2 min)
 

@@ -3,3 +3,4 @@ requests>=2.31
 pillow>=10.0
 numpy>=1.26
 python-dotenv>=1.0
+opencv-python>=4.8        # QR-code decoding for automatic registration

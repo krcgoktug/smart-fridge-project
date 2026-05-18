@@ -26,11 +26,19 @@ Config: copy .env.example -> .env  (see README.md). No secrets are committed.
 import io
 import os
 import sys
+import json
 import time
 import argparse
+from datetime import datetime
 
 import numpy as np
 from PIL import Image
+
+# OpenCV is only needed for QR-code decoding (automatic registration).
+try:
+    import cv2
+except ImportError:  # pragma: no cover
+    cv2 = None
 
 try:
     import requests
@@ -164,6 +172,113 @@ def update_product_in_firebase(product_id: str, result: dict) -> bool:
 
 
 # --------------------------------------------------------------------------
+# Automatic product registration (the "or backend" option)
+#
+# Mirrors the app's automatic flow: when the ESP32 DevKit reports a weight
+# event on /detection, fetch the camera image, decode its QR code, save the
+# product, and reset the detection flag.
+# --------------------------------------------------------------------------
+def decode_qr_from_image(image: Image.Image):
+    """Decode a QR code from a PIL image. Returns the text, or None.
+
+    The ESP32-CAM only provides the image; the decoding happens here.
+    """
+    if cv2 is None:
+        raise RuntimeError(
+            "opencv-python is required for QR decoding. "
+            "Run: pip install -r requirements.txt")
+    frame = np.asarray(image.convert("RGB"))
+    data, _points, _qr = cv2.QRCodeDetector().detectAndDecode(frame)
+    return data if data else None
+
+
+def _detection_url() -> str:
+    url = f"{FIREBASE_HOST}/devices/{DEVICE_ID}/detection.json"
+    if FIREBASE_AUTH:
+        url += f"?auth={FIREBASE_AUTH}"
+    return url
+
+
+def get_detection() -> dict:
+    """Read the current /detection node."""
+    if not FIREBASE_HOST:
+        return {}
+    resp = requests.get(_detection_url(), timeout=10)
+    return (resp.json() or {}) if resp.ok else {}
+
+
+def reset_detection() -> None:
+    """Clear the detection flag after a registration attempt."""
+    if not FIREBASE_HOST:
+        return
+    requests.patch(
+        _detection_url(),
+        json={"newProductDetected": False, "eventType": "none"},
+        timeout=10,
+    )
+
+
+def save_product(product: dict) -> bool:
+    """Write a product under /devices/<id>/products/<productId>."""
+    pid = product.get("productId")
+    if not pid or not FIREBASE_HOST:
+        return False
+    # Compute remainingHours from the expiry date.
+    try:
+        expiry = datetime.fromisoformat(str(product["expiryDate"]))
+        hours = int((expiry - datetime.now()).total_seconds() // 3600)
+        product["remainingHours"] = max(hours, 0)
+    except Exception:
+        pass
+    product["updatedAt"] = int(time.time())
+
+    url = f"{FIREBASE_HOST}/devices/{DEVICE_ID}/products/{pid}.json"
+    if FIREBASE_AUTH:
+        url += f"?auth={FIREBASE_AUTH}"
+    resp = requests.put(url, json=product, timeout=10)
+    return resp.ok
+
+
+def register_product_from_camera() -> dict:
+    """Fetch the camera image, decode its QR code and register the product."""
+    image = fetch_capture_image()
+    qr_text = decode_qr_from_image(image)
+    if not qr_text:
+        return {"ok": False, "error": "no QR code found in the image"}
+    try:
+        product = json.loads(qr_text)
+    except json.JSONDecodeError:
+        return {"ok": False, "error": "QR content is not valid JSON"}
+    if not isinstance(product, dict) or not product.get("productId"):
+        return {"ok": False, "error": "QR JSON missing productId"}
+
+    saved = save_product(product)
+    reset_detection()
+    return {"ok": saved, "product": product}
+
+
+def auto_register_loop(interval: float = 3.0) -> None:
+    """Poll /detection and auto-register whenever newProductDetected is true."""
+    print(f"[Auto] watching /detection every {interval}s (Ctrl+C to stop)")
+    while True:
+        try:
+            detection = get_detection()
+            if detection.get("newProductDetected") and \
+                    detection.get("eventType") == "added":
+                print("[Auto] product detected -> registering...")
+                result = register_product_from_camera()
+                if result.get("ok"):
+                    name = result["product"].get("name", "?")
+                    print(f"[Auto] registered: {name}")
+                else:
+                    print(f"[Auto] failed: {result.get('error')}")
+                    reset_detection()
+        except Exception as exc:
+            print(f"[Auto] error: {exc}")
+        time.sleep(interval)
+
+
+# --------------------------------------------------------------------------
 # Flask HTTP API
 # --------------------------------------------------------------------------
 app = Flask(__name__)
@@ -203,6 +318,19 @@ def analyze_endpoint():
     })
 
 
+@app.post("/auto-register")
+def auto_register_endpoint():
+    """Capture the camera image, decode its QR code and register the product.
+
+    This is the backend side of the automatic registration flow.
+    """
+    try:
+        result = register_product_from_camera()
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 502
+    return jsonify(result), 200 if result.get("ok") else 422
+
+
 # --------------------------------------------------------------------------
 # CLI entry point
 # --------------------------------------------------------------------------
@@ -217,11 +345,23 @@ def main():
                         help="do not write the result to Firebase")
     parser.add_argument("--serve", action="store_true",
                         help="run the Flask HTTP server")
+    parser.add_argument("--auto", action="store_true",
+                        help="poll /detection and auto-register products")
+    parser.add_argument("--register-once", action="store_true",
+                        help="capture once, decode the QR and register it")
     args = parser.parse_args()
 
     if args.serve:
         print(f"[Service] starting on http://0.0.0.0:{HTTP_PORT}")
         app.run(host="0.0.0.0", port=HTTP_PORT)
+        return
+
+    if args.auto:
+        auto_register_loop()
+        return
+
+    if args.register_once:
+        print(register_product_from_camera())
         return
 
     # One-shot CLI analysis.
