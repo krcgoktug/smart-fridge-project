@@ -51,6 +51,10 @@ This is a real limitation of local HTTP IoT devices, explained honestly in
 **[docs/camera-limitations.md](docs/camera-limitations.md)** — the project does
 not fake camera previews or claim a hosted page can show the live stream.
 
+Exact Windows commands for a local Chrome run, an Android phone run, an APK
+build and hardware mode are in
+**[mobile/smart_fridge_app/README.md](mobile/smart_fridge_app/README.md#running-the-app-windows)**.
+
 ---
 
 ## Repository structure
