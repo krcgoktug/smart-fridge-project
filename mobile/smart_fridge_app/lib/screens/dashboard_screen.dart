@@ -1,15 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
 import '../models/alert.dart';
-import '../models/banana_analysis.dart';
+import '../models/camera_config.dart';
+import '../models/product.dart';
 import '../models/sensor_data.dart';
+import '../services/alert_service.dart';
 import '../services/firebase_service.dart';
 import '../utils/status_colors.dart';
+import '../widgets/product_card.dart';
 import '../widgets/sensor_card.dart';
 
-/// Screen 1 - Dashboard. ESP32 status, live sensors, banana analysis, alerts.
+/// Screen 1 - Dashboard. Sensors, ESP32 status, camera preview, products,
+/// alerts.
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -23,7 +28,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // Re-evaluate the ESP32 offline timeout even with no new data.
+    // Re-evaluate the 60 s ESP32 offline timeout periodically.
     _refresh = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) setState(() {});
     });
@@ -38,37 +43,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Smart Fridge')),
+      appBar: AppBar(title: const Text('Zero Waste Smart Fridge')),
       body: StreamBuilder<SensorData>(
         stream: FirebaseService.sensorStream(),
         builder: (BuildContext context, AsyncSnapshot<SensorData> sSnap) {
           final SensorData sensors = sSnap.data ?? SensorData();
-          return StreamBuilder<BananaAnalysis>(
-            stream: FirebaseService.bananaAnalysisStream(),
+          return StreamBuilder<List<Product>>(
+            stream: FirebaseService.productsStream(),
             builder: (BuildContext context,
-                AsyncSnapshot<BananaAnalysis> bSnap) {
-              final BananaAnalysis banana = bSnap.data ?? BananaAnalysis();
-              return StreamBuilder<List<Alert>>(
-                stream: FirebaseService.alertsStream(),
+                AsyncSnapshot<List<Product>> pSnap) {
+              final List<Product> products = pSnap.data ?? <Product>[];
+              return StreamBuilder<CameraConfig>(
+                stream: FirebaseService.cameraStream(),
                 builder: (BuildContext context,
-                    AsyncSnapshot<List<Alert>> aSnap) {
-                  final List<Alert> alerts = aSnap.data ?? <Alert>[];
+                    AsyncSnapshot<CameraConfig> cSnap) {
+                  final CameraConfig camera =
+                      cSnap.data ?? CameraConfig();
+                  final List<Alert> alerts = AlertService.derive(
+                    sensors: sensors,
+                    products: products,
+                  );
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
                     children: <Widget>[
                       _Esp32Card(sensors: sensors),
                       const SizedBox(height: 14),
-                      const _SectionTitle('Sensors'),
-                      if (sensors.isOnline)
-                        _SensorGrid(sensors: sensors)
-                      else
-                        const _OfflineNotice(),
+                      const _SectionTitle('Environment'),
+                      _SensorGrid(sensors: sensors),
                       const SizedBox(height: 16),
-                      const _SectionTitle('Banana analysis'),
-                      _BananaCard(banana: banana),
+                      const _SectionTitle('Camera'),
+                      _CameraPreview(camera: camera),
+                      const SizedBox(height: 16),
+                      _SectionTitle('Products (${products.length})'),
+                      _LatestProducts(products: products),
                       const SizedBox(height: 16),
                       _SectionTitle('Alerts (${alerts.length})'),
-                      _AlertList(alerts: alerts),
+                      _AlertSummary(alerts: alerts),
                     ],
                   );
                 },
@@ -102,12 +112,12 @@ class _Esp32Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool online = sensors.isOnline;
-    final Color color = online ? StatusColors.fresh : StatusColors.danger;
+    final Color color = StatusColors.online(online);
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           color: color.withValues(alpha: 0.10),
         ),
         padding: const EdgeInsets.all(16),
@@ -116,9 +126,8 @@ class _Esp32Card extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.18),
-                shape: BoxShape.circle,
-              ),
+                  color: color.withValues(alpha: 0.18),
+                  shape: BoxShape.circle),
               child: Icon(online ? Icons.cloud_done : Icons.cloud_off,
                   color: color, size: 26),
             ),
@@ -127,48 +136,24 @@ class _Esp32Card extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(online ? 'ESP32 Online' : 'ESP32 Offline',
-                      style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: color)),
+                  Text(
+                    online
+                        ? 'ESP32 Sensor Board Online'
+                        : 'ESP32 Sensor Board Offline',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: color),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     online
-                        ? 'Sensor heartbeat is up to date.'
-                        : 'No sensor heartbeat for over 60 seconds.',
+                        ? 'Live sensor data is up to date.'
+                        : 'No sensor update for over 60 seconds.',
                     style: const TextStyle(
                         fontSize: 12, color: Colors.black54),
                   ),
                 ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _OfflineNotice extends StatelessWidget {
-  const _OfflineNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: const Color(0xFFFDECEA),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: const Padding(
-        padding: EdgeInsets.all(16),
-        child: Row(
-          children: <Widget>[
-            Icon(Icons.sensors_off, color: StatusColors.danger),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'ESP32 Offline — temperature, humidity, gas and weight '
-                'readings are not available right now.',
-                style: TextStyle(fontSize: 13, height: 1.4),
               ),
             ),
           ],
@@ -184,13 +169,14 @@ class _SensorGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool on = sensors.isOnline;
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 1.6,
+      childAspectRatio: 1.55,
       children: <Widget>[
         SensorCard(
           icon: Icons.thermostat,
@@ -198,6 +184,7 @@ class _SensorGrid extends StatelessWidget {
           value: sensors.temperature.toStringAsFixed(1),
           unit: '°C',
           color: const Color(0xFF1976D2),
+          enabled: on,
         ),
         SensorCard(
           icon: Icons.water_drop,
@@ -205,13 +192,15 @@ class _SensorGrid extends StatelessWidget {
           value: sensors.humidity.toStringAsFixed(0),
           unit: '%',
           color: const Color(0xFF0097A7),
+          enabled: on,
         ),
         SensorCard(
           icon: Icons.air,
           label: 'Gas (MQ135)',
-          value: sensors.gas.toStringAsFixed(0),
+          value: sensors.gasValue.toStringAsFixed(0),
           unit: 'adc',
           color: const Color(0xFF7B1FA2),
+          enabled: on,
         ),
         SensorCard(
           icon: Icons.scale,
@@ -219,88 +208,80 @@ class _SensorGrid extends StatelessWidget {
           value: sensors.weight.toStringAsFixed(0),
           unit: 'g',
           color: const Color(0xFF5D4037),
+          enabled: on,
         ),
       ],
     );
   }
 }
 
-class _BananaCard extends StatelessWidget {
-  const _BananaCard({required this.banana});
-  final BananaAnalysis banana;
+class _CameraPreview extends StatelessWidget {
+  const _CameraPreview({required this.camera});
+  final CameraConfig camera;
 
   @override
   Widget build(BuildContext context) {
-    if (!banana.hasData) {
+    if (!camera.isConfigured) {
       return const Card(
         child: ListTile(
-          leading: Icon(Icons.local_florist, color: StatusColors.neutral),
-          title: Text('No banana analysis yet'),
-          subtitle: Text('The image analysis service writes a result after '
-              'each cycle.'),
+          leading: Icon(Icons.videocam_off, color: StatusColors.neutral),
+          title: Text('Camera not configured'),
+          subtitle: Text('Set the ESP32-CAM IP on the Camera tab.'),
         ),
       );
     }
-    final Color color = StatusColors.forBananaStatus(banana.visualStatus);
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(Icons.local_florist, color: color),
-                const SizedBox(width: 8),
-                Text('Browning: ${banana.brownPercent.toStringAsFixed(1)} %',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(banana.visualStatus,
-                      style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: (banana.brownPercent / 100).clamp(0, 1).toDouble(),
-                minHeight: 8,
-                backgroundColor: Colors.black12,
-                color: color,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Container(
+            color: Colors.black,
+            child: Mjpeg(
+              stream: camera.streamUrl,
+              isLive: true,
+              fit: BoxFit.contain,
+              error: (BuildContext context, dynamic e, dynamic s) =>
+                  const Center(
+                child: Text('Camera preview unavailable',
+                    style: TextStyle(color: Colors.white60, fontSize: 12)),
               ),
             ),
-            const SizedBox(height: 10),
-            Text('Recommendation: ${banana.status}',
-                style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
-            Text(banana.message,
-                style: const TextStyle(
-                    fontSize: 12, color: Colors.black54)),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _AlertList extends StatelessWidget {
-  const _AlertList({required this.alerts});
+class _LatestProducts extends StatelessWidget {
+  const _LatestProducts({required this.products});
+  final List<Product> products;
+
+  @override
+  Widget build(BuildContext context) {
+    if (products.isEmpty) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.inventory_2_outlined,
+              color: StatusColors.neutral),
+          title: Text('No products yet'),
+          subtitle: Text('Scan a product QR code on the Camera tab.'),
+        ),
+      );
+    }
+    return Column(
+      children: products
+          .take(3)
+          .map((Product p) => ProductCard(product: p))
+          .toList(),
+    );
+  }
+}
+
+class _AlertSummary extends StatelessWidget {
+  const _AlertSummary({required this.alerts});
   final List<Alert> alerts;
 
   @override
@@ -316,10 +297,11 @@ class _AlertList extends StatelessWidget {
     }
     return Column(
       children: alerts.take(4).map((Alert a) {
+        final Color color = StatusColors.forSeverity(a.severity);
         return Card(
           child: ListTile(
             leading: Icon(StatusColors.iconForSeverity(a.severity),
-                color: StatusColors.forSeverity(a.severity)),
+                color: color),
             title: Text(a.message, style: const TextStyle(fontSize: 14)),
           ),
         );

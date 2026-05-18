@@ -1,42 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../app_config.dart';
+import '../models/camera_config.dart';
 import '../services/firebase_service.dart';
-import '../services/settings_service.dart';
 import '../utils/status_colors.dart';
 
-/// Screen 5 - Settings. ESP32-CAM address, connection info, hardware notes.
-class SettingsScreen extends StatefulWidget {
+/// Screen 5 - Settings. Firebase info, camera IP, hardware-mode notes.
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _camController;
-
-  @override
-  void initState() {
-    super.initState();
-    _camController =
-        TextEditingController(text: SettingsService.cameraBaseUrl);
-  }
-
-  @override
-  void dispose() {
-    _camController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveCamera() async {
-    await SettingsService.setCameraBaseUrl(_camController.text);
-    if (!mounted) return;
-    setState(() {});
-    ScaffoldMessenger.of(context)
-      ..removeCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Camera address saved.')));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,71 +17,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          // --- ESP32-CAM address ---
           _Card(
-            title: 'ESP32-CAM address',
-            children: <Widget>[
-              const Text(
-                'Enter the camera IP / URL, e.g. http://192.168.1.50. Used '
-                'for the live stream on the Camera screen.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TextField(
-                      controller: _camController,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'Camera IP / URL',
-                        hintText: 'http://192.168.1.50',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                      onPressed: _saveCamera, child: const Text('Save')),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                SettingsService.streamUrl.isEmpty
-                    ? 'Stream URL: (not set)'
-                    : 'Stream URL: ${SettingsService.streamUrl}',
-                style: const TextStyle(fontSize: 11, color: Colors.black45),
-              ),
-            ],
-          ),
-
-          // --- Camera note ---
-          const Card(
-            color: Color(0xFFFFF3CD),
-            child: Padding(
-              padding: EdgeInsets.all(14),
-              child: Text(
-                'The live ESP32-CAM stream needs the Android app or a local '
-                'run on the same Wi-Fi as the camera. A web build served over '
-                'HTTPS cannot show the HTTP camera stream (browser '
-                'mixed-content policy). See docs/camera-limitations.md.',
-                style: TextStyle(fontSize: 12.5, height: 1.4),
-              ),
-            ),
-          ),
-
-          // --- Connection ---
-          _Card(
-            title: 'Connection',
+            title: 'Firebase',
             children: <Widget>[
               _Row(
-                label: 'Firebase',
-                value: ready ? 'Configured' : 'Not configured',
+                label: 'Status',
+                value: ready ? 'Connected' : 'Not configured',
                 valueColor:
                     ready ? StatusColors.fresh : StatusColors.danger,
               ),
               const _Row(label: 'Device ID', value: AppConfig.deviceId),
+              const _Row(
+                  label: 'Database path', value: 'devices/fridge_01'),
             ],
           ),
           if (!ready)
@@ -126,21 +44,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-
-          // --- Architecture ---
+          StreamBuilder<CameraConfig>(
+            stream: FirebaseService.cameraStream(),
+            builder:
+                (BuildContext context, AsyncSnapshot<CameraConfig> snap) {
+              final CameraConfig cam = snap.data ?? CameraConfig();
+              return _Card(
+                title: 'Camera',
+                children: <Widget>[
+                  _Row(
+                    label: 'ESP32-CAM IP',
+                    value: cam.isConfigured ? cam.localIp : 'Not set',
+                  ),
+                  _Row(
+                    label: 'Stream URL',
+                    value:
+                        cam.isConfigured ? cam.streamUrl : '-',
+                  ),
+                  const _Row(
+                    label: 'Change it',
+                    value: 'Use the Camera tab to set the IP.',
+                  ),
+                ],
+              );
+            },
+          ),
           const _Card(
-            title: 'Architecture',
+            title: 'Hardware mode — how the network works',
             children: <Widget>[
-              _Row(label: 'Sensor node', value: 'ESP32 DevKit V1'),
-              _Row(label: 'Camera node', value: 'ESP32-CAM AI-Thinker'),
-              _Row(label: 'Processing', value: 'Image analysis service'),
-              _Row(label: 'This app', value: 'Read-only dashboard'),
+              _Note(
+                'Sensor data (temperature, humidity, gas, weight), products '
+                'and alerts go through Firebase. Every team member sees them '
+                'live — even though the ESP32 is plugged into just one PC.',
+              ),
+              SizedBox(height: 8),
+              _Note(
+                'The ESP32-CAM live stream is on the LOCAL network. Only a '
+                'phone/PC on the SAME Wi-Fi as the camera can view '
+                'http://CAMERA_IP/stream.',
+              ),
             ],
           ),
-          const SizedBox(height: 8),
-          const Center(
-            child: Text('Zero Waste Smart Fridge  -  v1.0.0',
-                style: TextStyle(color: Colors.black45, fontSize: 12)),
+          const _Card(
+            title: 'About',
+            children: <Widget>[
+              _Row(label: 'App', value: 'Zero Waste Smart Fridge'),
+              _Row(label: 'Version', value: '1.0.0'),
+              _Row(label: 'Devices', value: 'ESP32 DevKit + ESP32-CAM'),
+            ],
           ),
         ],
       ),
@@ -156,7 +107,7 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -188,7 +139,7 @@ class _Row extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           SizedBox(
-            width: 120,
+            width: 110,
             child: Text(label,
                 style: const TextStyle(color: Colors.black54)),
           ),
@@ -200,5 +151,17 @@ class _Row extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _Note extends StatelessWidget {
+  const _Note(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text,
+        style: const TextStyle(
+            fontSize: 12.5, color: Colors.black87, height: 1.4));
   }
 }

@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/product.dart';
 import '../services/firebase_service.dart';
+import '../utils/status_colors.dart';
 import '../widgets/product_card.dart';
 
-/// Screen 2 - Products. Read-only list of QR-detected products.
+/// Screen 3 - Products. QR-detected products with expiry status.
 class ProductListScreen extends StatelessWidget {
   const ProductListScreen({super.key});
 
@@ -22,8 +23,26 @@ class ProductListScreen extends StatelessWidget {
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
             itemCount: products.length,
-            itemBuilder: (BuildContext context, int i) =>
-                ProductCard(product: products[i]),
+            itemBuilder: (BuildContext context, int i) {
+              final Product p = products[i];
+              return Dismissible(
+                key: ValueKey<String>(p.productId),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
+                  decoration: BoxDecoration(
+                    color: StatusColors.danger,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.delete, color: Colors.white),
+                ),
+                onDismissed: (_) =>
+                    FirebaseService.deleteProduct(p.productId),
+                child: ProductCard(product: p),
+              );
+            },
           );
         },
       ),
@@ -49,8 +68,8 @@ class _Empty extends StatelessWidget {
                     TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             SizedBox(height: 6),
             Text(
-              'Products appear here when the backend detects their QR code '
-              'on the camera.',
+              'Open the Camera tab and use "Scan QR" to register a product '
+              'from its QR sticker.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black54),
             ),

@@ -14,12 +14,12 @@ import 'utils/status_colors.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load persisted settings (the ESP32-CAM address).
+  // Local cache (camera IP).
   await SettingsService.init();
 
   // Initialise Firebase. With the committed placeholder firebase_options.dart
-  // the app still opens; data screens show honest "offline / no data" states
-  // until a real project is configured via `flutterfire configure`.
+  // the app still opens; data screens show honest empty / offline states
+  // until a real project is connected via `flutterfire configure`.
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -48,7 +48,7 @@ class SmartFridgeApp extends StatelessWidget {
           seedColor: StatusColors.fresh,
           primary: StatusColors.fresh,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF4F6F5),
+        scaffoldBackgroundColor: const Color(0xFFF3F5F4),
         cardTheme: const CardThemeData(
           clipBehavior: Clip.antiAlias,
           margin: EdgeInsets.symmetric(vertical: 6),
@@ -56,6 +56,7 @@ class SmartFridgeApp extends StatelessWidget {
         appBarTheme: const AppBarTheme(
           backgroundColor: StatusColors.fresh,
           foregroundColor: Colors.white,
+          centerTitle: true,
           elevation: 0,
         ),
       ),
@@ -77,8 +78,8 @@ class _HomeShellState extends State<HomeShell> {
 
   static const List<Widget> _screens = <Widget>[
     DashboardScreen(),
-    ProductListScreen(),
     CameraViewScreen(),
+    ProductListScreen(),
     AlertsScreen(),
     SettingsScreen(),
   ];
@@ -96,13 +97,13 @@ class _HomeShellState extends State<HomeShell> {
               selectedIcon: Icon(Icons.dashboard),
               label: 'Dashboard'),
           NavigationDestination(
-              icon: Icon(Icons.list_alt_outlined),
-              selectedIcon: Icon(Icons.list_alt),
-              label: 'Products'),
-          NavigationDestination(
               icon: Icon(Icons.videocam_outlined),
               selectedIcon: Icon(Icons.videocam),
               label: 'Camera'),
+          NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              selectedIcon: Icon(Icons.inventory_2),
+              label: 'Products'),
           NavigationDestination(
               icon: Icon(Icons.notifications_outlined),
               selectedIcon: Icon(Icons.notifications),

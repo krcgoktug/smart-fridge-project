@@ -1,5 +1,5 @@
 name: smart_fridge_app
-description: Zero Waste Smart Fridge - IoT dashboard app (read-only viewer).
+description: Zero Waste Smart Fridge - IoT monitoring app.
 publish_to: "none"
 version: 1.0.0+1
 
@@ -12,16 +12,20 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
 
-  # Firebase Realtime Database (the app only READS).
+  # Firebase Realtime Database.
   firebase_core: ^3.6.0
   firebase_database: ^11.1.4
 
-  # Live ESP32-CAM MJPEG stream. Mobile/desktop uses flutter_mjpeg; the web
-  # build uses a native <img> element via package:web (see camera_stream_*).
+  # Live ESP32-CAM MJPEG stream.
   flutter_mjpeg: ^2.0.0
-  web: ^1.1.0
 
-  # Persist the user-configured ESP32-CAM address.
+  # Capture a frame from the ESP32-CAM and decode its QR code.
+  # http is pinned to 0.13.x for compatibility with flutter_mjpeg.
+  http: ^0.13.6         # fetch /capture
+  image: ^4.3.0         # decode the JPEG into pixels
+  zxing2: ^0.2.3        # pure-Dart QR decoding
+
+  # Persist the camera IP locally.
   shared_preferences: ^2.3.2
 
   # Date / time formatting.

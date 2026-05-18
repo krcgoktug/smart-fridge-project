@@ -1,40 +1,29 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Persists the user-configurable ESP32-CAM address.
+/// Local cache of the ESP32-CAM address.
 ///
-/// The camera IP is never hard-coded — the user enters it on the Settings
-/// screen. It is used only to display the live MJPEG stream.
+/// The shared camera config lives in Firebase (`devices/fridge_01/camera`).
+/// This local copy just lets the Camera screen pre-fill the input instantly
+/// before the Firebase value arrives.
 class SettingsService {
-  static const String _kCameraBaseUrl = 'cameraBaseUrl';
+  static const String _kCameraIp = 'cameraIp';
 
   static SharedPreferences? _prefs;
-  static String _cameraBaseUrl = '';
+  static String _cameraIp = '';
 
-  /// Load persisted settings. Call once at startup.
   static Future<void> init() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      _cameraBaseUrl = _prefs?.getString(_kCameraBaseUrl) ?? '';
+      _cameraIp = _prefs?.getString(_kCameraIp) ?? '';
     } catch (_) {
-      _cameraBaseUrl = '';
+      _cameraIp = '';
     }
   }
 
-  /// The ESP32-CAM base address, e.g. `http://192.168.1.50`. Empty if unset.
-  static String get cameraBaseUrl => _cameraBaseUrl;
+  static String get cameraIp => _cameraIp;
 
-  static Future<void> setCameraBaseUrl(String value) async {
-    _cameraBaseUrl = value.trim();
-    await _prefs?.setString(_kCameraBaseUrl, _cameraBaseUrl);
+  static Future<void> setCameraIp(String value) async {
+    _cameraIp = value.trim();
+    await _prefs?.setString(_kCameraIp, _cameraIp);
   }
-
-  static String _base() => _cameraBaseUrl.replaceAll(RegExp(r'/+$'), '');
-
-  /// MJPEG stream URL, or '' when the address is not set.
-  static String get streamUrl =>
-      _cameraBaseUrl.isEmpty ? '' : '${_base()}/stream';
-
-  /// Single-frame snapshot URL, or '' when the address is not set.
-  static String get captureUrl =>
-      _cameraBaseUrl.isEmpty ? '' : '${_base()}/capture';
 }

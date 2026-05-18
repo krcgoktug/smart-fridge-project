@@ -1,21 +1,17 @@
 import 'package:firebase_database/firebase_database.dart';
 
 import '../app_config.dart';
-import '../models/alert.dart';
-import '../models/banana_analysis.dart';
-import '../models/camera_status.dart';
+import '../models/camera_config.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 
-/// Read-only data access layer.
+/// Data access layer for Firebase Realtime Database.
 ///
-/// The Flutter app is a pure visualization layer: it only **reads** from
-/// Firebase Realtime Database. The ESP32 boards and the image analysis
-/// service are the only writers.
+/// The app READS sensors, products and the camera config, and WRITES products
+/// (after a QR scan) and the camera config (when the IP is set).
 ///
-/// When [ready] is false (Firebase not configured for a real project), the
-/// streams emit empty data so the UI shows honest "offline / no data" states
-/// instead of crashing.
+/// When [ready] is false (Firebase not configured) the read streams emit
+/// empty data so the UI shows honest "offline / no data" states.
 class FirebaseService {
   /// True once Firebase is initialised against a real project.
   static bool ready = false;
@@ -23,7 +19,8 @@ class FirebaseService {
   static DatabaseReference get _root =>
       FirebaseDatabase.instance.ref(AppConfig.deviceRoot);
 
-  /// Live ESP32 sensor heartbeat.
+  // --- Reads -----------------------------------------------------------------
+
   static Stream<SensorData> sensorStream() {
     if (!ready) return Stream<SensorData>.value(SensorData());
     return _root.child('sensors').onValue.map(
@@ -31,15 +28,13 @@ class FirebaseService {
         );
   }
 
-  /// Live ESP32-CAM online status.
-  static Stream<CameraStatus> cameraStatusStream() {
-    if (!ready) return Stream<CameraStatus>.value(CameraStatus());
+  static Stream<CameraConfig> cameraStream() {
+    if (!ready) return Stream<CameraConfig>.value(CameraConfig());
     return _root.child('camera').onValue.map(
-          (DatabaseEvent e) => CameraStatus.fromMap(_asMap(e.snapshot.value)),
+          (DatabaseEvent e) => CameraConfig.fromMap(_asMap(e.snapshot.value)),
         );
   }
 
-  /// Live list of QR-detected products.
   static Stream<List<Product>> productsStream() {
     if (!ready) return Stream<List<Product>>.value(<Product>[]);
     return _root.child('products').onValue.map((DatabaseEvent e) {
@@ -51,39 +46,32 @@ class FirebaseService {
         if (pm != null) list.add(Product.fromMap(key.toString(), pm));
       });
       list.sort((Product a, Product b) =>
-          b.detectedAt.compareTo(a.detectedAt));
+          a.daysUntilExpiry().compareTo(b.daysUntilExpiry()));
       return list;
     });
   }
 
-  /// Live banana browning analysis result.
-  static Stream<BananaAnalysis> bananaAnalysisStream() {
-    if (!ready) return Stream<BananaAnalysis>.value(BananaAnalysis());
-    return _root.child('bananaAnalysis').onValue.map(
-          (DatabaseEvent e) =>
-              BananaAnalysis.fromMap(_asMap(e.snapshot.value)),
-        );
+  // --- Writes ----------------------------------------------------------------
+
+  /// Register/update a product (after a QR scan from the camera).
+  static Future<void> saveProduct(Product product) async {
+    if (!ready) return;
+    await _root.child('products/${product.productId}').set(product.toMap());
   }
 
-  /// Live list of alerts published by the image analysis service.
-  static Stream<List<Alert>> alertsStream() {
-    if (!ready) return Stream<List<Alert>>.value(<Alert>[]);
-    return _root.child('alerts').onValue.map((DatabaseEvent e) {
-      final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
-      if (map == null) return <Alert>[];
-      final List<Alert> list = <Alert>[];
-      map.forEach((dynamic key, dynamic value) {
-        final Map<dynamic, dynamic>? am = _asMap(value);
-        if (am != null) list.add(Alert.fromMap(am));
-      });
-      list.sort((Alert a, Alert b) {
-        final int bySeverity = a.severityRank.compareTo(b.severityRank);
-        if (bySeverity != 0) return bySeverity;
-        return b.createdAt.compareTo(a.createdAt);
-      });
-      return list;
-    });
+  /// Remove a product (e.g. it left the fridge).
+  static Future<void> deleteProduct(String productId) async {
+    if (!ready) return;
+    await _root.child('products/$productId').remove();
   }
+
+  /// Save the camera configuration so every team member's app shares it.
+  static Future<void> saveCameraConfig(CameraConfig config) async {
+    if (!ready) return;
+    await _root.child('camera').set(config.toMap());
+  }
+
+  // --- Helpers ---------------------------------------------------------------
 
   static Map<dynamic, dynamic>? _asMap(Object? value) {
     if (value is Map) return value;

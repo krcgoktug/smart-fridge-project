@@ -1,28 +1,26 @@
-/// Latest sensor heartbeat from the ESP32 DevKit, read from
-/// `devices/<id>/sensors`.
+/// Live sensor values from the ESP32 DevKit, read from
+/// `devices/fridge_01/sensors`.
 class SensorData {
   SensorData({
-    this.weight = 0,
     this.temperature = 0,
     this.humidity = 0,
-    this.gas = 0,
+    this.gasValue = 0,
+    this.weight = 0,
     this.updatedAt = 0,
-    this.alive = false,
   });
 
-  final num weight; // grams
   final num temperature; // Celsius
-  final num humidity; // percent (DHT11)
-  final num gas; // MQ135 raw ADC
-  final num updatedAt; // Unix seconds (NTP)
-  final bool alive;
+  final num humidity; // percent
+  final num gasValue; // MQ135 raw ADC
+  final num weight; // grams
+  final num updatedAt; // Unix seconds
 
-  /// True when a heartbeat exists at all.
+  /// True when a reading exists at all.
   bool get hasData => updatedAt > 0;
 
-  /// The ESP32 is online when the heartbeat is fresh (< 60 s old).
+  /// The ESP32 board is considered online when the last update is < 60 s old.
   bool get isOnline {
-    if (!hasData || !alive) return false;
+    if (!hasData) return false;
     final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return (now - updatedAt) <= 60;
   }
@@ -36,12 +34,11 @@ class SensorData {
     }
 
     return SensorData(
-      weight: n(map['weight']),
       temperature: n(map['temperature']),
       humidity: n(map['humidity']),
-      gas: n(map['gas']),
+      gasValue: n(map['gasValue']),
+      weight: n(map['weight']),
       updatedAt: n(map['updatedAt']),
-      alive: map['alive'] == true,
     );
   }
 }
