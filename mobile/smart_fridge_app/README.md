@@ -3,17 +3,17 @@
 The **visualization layer** of the Zero Waste Smart Fridge. It is a
 **read-only** dashboard: it reads Firebase Realtime Database and displays the
 ESP32-CAM stream. It does **no** writing, **no** QR decoding and **no** image
-processing — the ESP32 boards and the Python backend do that.
+processing — the ESP32 boards and the image analysis service do that.
 
 ## Screens
 
 | Screen | Shows |
 |--------|-------|
 | Dashboard | ESP32 online/offline, live sensors, banana analysis, alerts |
-| Products | QR-detected products with expiry status |
-| Camera | Live ESP32-CAM MJPEG stream |
-| Alerts | Alerts derived on-device from the live data |
-| Settings | ESP32-CAM IP, Firebase status, hardware-mode note |
+| Products | QR-detected products with category and expiry status |
+| Camera | Live ESP32-CAM MJPEG stream + camera online status |
+| Alerts | Alerts read from Firebase (published by the analysis service) |
+| Settings | ESP32-CAM IP, Firebase status, camera note |
 
 ## Project layout
 
@@ -22,10 +22,10 @@ lib/
   main.dart                  App entry + bottom navigation
   app_config.dart            Device id / database root
   firebase_options.dart      PLACEHOLDER config (replace via flutterfire)
-  models/                    SensorData, Product, BananaAnalysis, Alert
+  models/                    SensorData, CameraStatus, Product,
+                             BananaAnalysis, Alert
   services/
     firebase_service.dart    Read-only Realtime Database streams
-    alert_service.dart       Derives alerts from the data
     settings_service.dart    Persists the ESP32-CAM address
   utils/status_colors.dart   Green / amber / red palette
   widgets/                   SensorCard, ProductCard, StatusBadge
@@ -59,19 +59,19 @@ flutterfire configure
 ## Run
 
 ```bash
-flutter run                 # device / emulator / -d chrome
+flutter run                 # device / emulator
+flutter test                # unit tests
 ```
 
-### Android APK
+### Android APK (recommended for the live camera)
 
 ```bash
 flutter build apk --release
 # output: build/app/outputs/flutter-apk/app-release.apk
 ```
 
-The repo also builds the APK in CI — see
-[`.github/workflows/build-apk.yml`](../../.github/workflows/build-apk.yml);
-download it from the **Actions** tab.
+Install the APK on a phone that is on the **same Wi-Fi as the ESP32-CAM** to
+see the real camera stream.
 
 ### Web
 
@@ -79,9 +79,10 @@ download it from the **Actions** tab.
 flutter build web
 ```
 
-> The web build is **UI only**. On the HTTPS GitHub Pages site browsers block
-> the ESP32-CAM's HTTP stream (mixed content). Use the Android app or a local
-> run for the real camera stream.
+> A web build can show sensors, products, banana analysis and alerts, but
+> **not** the live camera: browsers block the ESP32-CAM's HTTP stream from an
+> HTTPS page (mixed content). See
+> [docs/camera-limitations.md](../../docs/camera-limitations.md).
 
 ## Camera address
 

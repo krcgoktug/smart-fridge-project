@@ -2,9 +2,13 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
+import '../models/camera_status.dart';
+import '../services/firebase_service.dart';
 import '../services/settings_service.dart';
+import '../utils/status_colors.dart';
 
-/// Screen 3 - Camera. Shows the live ESP32-CAM MJPEG stream.
+/// Screen 3 - Camera. Shows the live ESP32-CAM MJPEG stream and the camera
+/// online status reported by the image analysis service.
 class CameraViewScreen extends StatefulWidget {
   const CameraViewScreen({super.key});
 
@@ -33,6 +37,15 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
         children: <Widget>[
           if (kIsWeb) const _WebLimitationNote(),
           if (kIsWeb) const SizedBox(height: 14),
+          StreamBuilder<CameraStatus>(
+            stream: FirebaseService.cameraStatusStream(),
+            builder:
+                (BuildContext context, AsyncSnapshot<CameraStatus> snap) {
+              return _CameraStatusCard(
+                  status: snap.data ?? CameraStatus());
+            },
+          ),
+          const SizedBox(height: 14),
           _StreamView(streamUrl: streamUrl),
           const SizedBox(height: 14),
           Card(
@@ -57,6 +70,38 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CameraStatusCard extends StatelessWidget {
+  const _CameraStatusCard({required this.status});
+  final CameraStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool online = status.online;
+    final Color color = online ? StatusColors.fresh : StatusColors.danger;
+    final String detail;
+    if (!status.hasData) {
+      detail = 'The image analysis service has not reported the camera yet.';
+    } else if (online) {
+      final String res = status.resolutionLabel;
+      detail = res.isEmpty
+          ? 'The service is reading frames from the camera.'
+          : 'The service is reading $res frames from the camera.';
+    } else {
+      detail = 'The image analysis service cannot reach the camera.';
+    }
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: ListTile(
+        leading: Icon(online ? Icons.videocam : Icons.videocam_off,
+            color: color),
+        title: Text(online ? 'Camera Online' : 'Camera Offline',
+            style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+        subtitle: Text(detail, style: const TextStyle(fontSize: 12)),
       ),
     );
   }
@@ -125,9 +170,10 @@ class _WebLimitationNote extends StatelessWidget {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Hardware Mode requires the Android app or a local Flutter '
-                'run. The GitHub Pages site is HTTPS and browsers block the '
-                "ESP32-CAM's HTTP stream (mixed content).",
+                'This is a web build. Browsers block the ESP32-CAM\'s HTTP '
+                'stream from an HTTPS page (mixed content). For the live '
+                'stream use the Android app or a local run on the same '
+                'Wi-Fi as the camera.',
                 style: TextStyle(fontSize: 12.5, color: Color(0xFF8A6D00)),
               ),
             ),

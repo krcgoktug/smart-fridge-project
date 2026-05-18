@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_fridge_app/models/alert.dart';
 import 'package:smart_fridge_app/models/banana_analysis.dart';
+import 'package:smart_fridge_app/models/camera_status.dart';
 import 'package:smart_fridge_app/models/product.dart';
 import 'package:smart_fridge_app/models/sensor_data.dart';
-import 'package:smart_fridge_app/services/alert_service.dart';
 
 String _date(Duration offset) =>
     DateTime.now().add(offset).toIso8601String().split('T').first;
@@ -14,7 +14,7 @@ Product _product(String name, String expiry) =>
     Product(key: name, productName: name, expiryDate: expiry);
 
 void main() {
-  group('Product expiry status', () {
+  group('Product', () {
     test('classifies Fresh / Expiring Soon / Expired', () {
       expect(_product('A', _date(const Duration(days: 10))).expiryStatus(),
           'Fresh');
@@ -24,18 +24,23 @@ void main() {
           'Expired');
     });
 
-    test('warning flag follows the status', () {
-      expect(_product('A', _date(const Duration(days: 10))).needsWarning,
-          isFalse);
-      expect(_product('C', _date(const Duration(days: -1))).needsWarning,
-          isTrue);
+    test('parses the QR-schema fields', () {
+      final Product p = Product.fromMap('banana_001', <String, dynamic>{
+        'productId': 'banana_001',
+        'productName': 'Banana',
+        'category': 'Fruit',
+        'expiryDate': '2026-05-25',
+        'detectedAt': 1710000000,
+      });
+      expect(p.productId, 'banana_001');
+      expect(p.category, 'Fruit');
+      expect(p.productName, 'Banana');
     });
   });
 
   group('SensorData online detection', () {
     test('fresh + alive is online; stale or not-alive is offline', () {
-      expect(
-          SensorData(updatedAt: _now(), alive: true).isOnline, isTrue);
+      expect(SensorData(updatedAt: _now(), alive: true).isOnline, isTrue);
       expect(SensorData(updatedAt: _now() - 30, alive: true).isOnline,
           isTrue);
       expect(SensorData(updatedAt: _now() - 120, alive: true).isOnline,
@@ -46,53 +51,58 @@ void main() {
   });
 
   group('BananaAnalysis', () {
-    test('parses a map and flags warnings', () {
+    test('parses the four-tier schema and flags warnings', () {
       final BananaAnalysis fresh = BananaAnalysis.fromMap(<String, dynamic>{
-        'brownPercent': 8.0,
-        'status': 'Fresh',
+        'brownPercent': 8,
+        'visualStatus': 'Fresh',
+        'status': 'Good',
         'analyzedAt': _now(),
       });
       expect(fresh.brownPercent, 8.0);
       expect(fresh.needsWarning, isFalse);
 
-      final BananaAnalysis rotten = BananaAnalysis.fromMap(<String, dynamic>{
-        'brownPercent': 60.0,
-        'status': 'Rotten',
+      final BananaAnalysis spoiled =
+          BananaAnalysis.fromMap(<String, dynamic>{
+        'brownPercent': 72,
+        'visualStatus': 'Spoilage Risk',
+        'status': 'Do Not Consume',
         'analyzedAt': _now(),
       });
-      expect(rotten.needsWarning, isTrue);
-      expect(rotten.warningMessage.toLowerCase(), contains('rotten'));
+      expect(spoiled.needsWarning, isTrue);
+      expect(spoiled.message.toLowerCase(), contains('do not consume'));
     });
   });
 
-  group('AlertService', () {
-    test('derives alerts for offline ESP32 and expiring products', () {
-      final List<Alert> alerts = AlertService.derive(
-        sensors: SensorData(), // offline
-        products: <Product>[
-          _product('Milk', _date(const Duration(days: -1))), // expired
-          _product('Eggs', _date(const Duration(days: 30))), // fresh
-        ],
-        banana: BananaAnalysis(),
-      );
-      expect(alerts.any((Alert a) => a.message.contains('offline')), isTrue);
-      expect(alerts.any((Alert a) => a.message.contains('Milk')), isTrue);
-      expect(alerts.any((Alert a) => a.message.contains('Eggs')), isFalse);
+  group('CameraStatus', () {
+    test('parses the camera node', () {
+      final CameraStatus c = CameraStatus.fromMap(<String, dynamic>{
+        'online': true,
+        'ip': 'http://192.168.1.50',
+        'lastFrameAt': _now(),
+        'frameWidth': 640,
+        'frameHeight': 480,
+      });
+      expect(c.online, isTrue);
+      expect(c.resolutionLabel, '640 x 480');
     });
+  });
 
-    test('no alerts when everything is healthy', () {
-      final List<Alert> alerts = AlertService.derive(
-        sensors: SensorData(updatedAt: _now(), alive: true),
-        products: <Product>[
-          _product('Cheese', _date(const Duration(days: 20))),
-        ],
-        banana: BananaAnalysis(
-          brownPercent: 5,
-          status: 'Fresh',
-          analyzedAt: _now(),
-        ),
-      );
-      expect(alerts, isEmpty);
+  group('Alert', () {
+    test('parses a Firebase alert and ranks severity', () {
+      final Alert danger = Alert.fromMap(<String, dynamic>{
+        'type': 'banana',
+        'message': 'Banana shows spoilage risk.',
+        'severity': 'danger',
+        'createdAt': _now(),
+      });
+      final Alert warning = Alert.fromMap(<String, dynamic>{
+        'type': 'expiry',
+        'message': 'Milk expires soon.',
+        'severity': 'warning',
+        'createdAt': _now(),
+      });
+      expect(danger.message, contains('spoilage'));
+      expect(danger.severityRank, lessThan(warning.severityRank));
     });
   });
 }

@@ -1,16 +1,20 @@
-/// A product registered from a QR code by the backend, read from
-/// `devices/<id>/products/<key>`.
+/// A product registered from a QR code by the image analysis service, read
+/// from `devices/<id>/products/<key>`.
 class Product {
   Product({
     required this.key,
+    this.productId = '',
     required this.productName,
+    this.category = '',
     required this.expiryDate,
     this.detectedAt = 0,
     this.source = 'qr',
   });
 
-  final String key; // Firebase node key
+  final String key; // Firebase node key (== productId)
+  final String productId;
   final String productName;
+  final String category; // Fruit / Vegetable / Dairy / Packaged / ...
   final String expiryDate; // YYYY-MM-DD
   final num detectedAt; // Unix seconds
   final String source; // "qr"
@@ -24,6 +28,7 @@ class Product {
 
   /// Expiry-based status: Fresh / Expiring Soon / Expired.
   String expiryStatus() {
+    if (expiryDate.isEmpty) return 'Fresh';
     final int hours = hoursUntilExpiry();
     if (hours <= 0) return 'Expired';
     if (hours <= 72) return 'Expiring Soon';
@@ -51,7 +56,9 @@ class Product {
 
     return Product(
       key: key,
+      productId: (map['productId'] ?? key).toString(),
       productName: (map['productName'] ?? 'Unknown').toString(),
+      category: (map['category'] ?? '').toString(),
       expiryDate: (map['expiryDate'] ?? '').toString(),
       detectedAt: n(map['detectedAt']),
       source: (map['source'] ?? 'qr').toString(),

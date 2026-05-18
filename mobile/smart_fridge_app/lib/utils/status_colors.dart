@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 /// Green / amber / red palette used across the UI.
 class StatusColors {
   static const Color fresh = Color(0xFF2E7D32); // green
+  static const Color amber400 = Color(0xFFC0A000); // muted yellow (caution)
   static const Color warning = Color(0xFFF9A825); // amber
   static const Color danger = Color(0xFFC62828); // red
   static const Color neutral = Color(0xFF607D8B); // blue-grey
@@ -21,13 +22,16 @@ class StatusColors {
     }
   }
 
-  /// Color for a banana browning status (Fresh / Warning / Rotten).
-  static Color forBananaStatus(String status) {
-    switch (status) {
-      case 'Rotten':
+  /// Color for a banana visual status (Fresh / Slight Browning /
+  /// Browning Detected / Spoilage Risk).
+  static Color forBananaStatus(String visualStatus) {
+    switch (visualStatus) {
+      case 'Spoilage Risk':
         return danger;
-      case 'Warning':
+      case 'Browning Detected':
         return warning;
+      case 'Slight Browning':
+        return amber400;
       case 'Fresh':
         return fresh;
       default:

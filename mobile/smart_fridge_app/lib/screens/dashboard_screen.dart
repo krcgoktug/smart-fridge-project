@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/alert.dart';
 import '../models/banana_analysis.dart';
-import '../models/product.dart';
 import '../models/sensor_data.dart';
-import '../services/alert_service.dart';
 import '../services/firebase_service.dart';
 import '../utils/status_colors.dart';
 import '../widgets/sensor_card.dart';
@@ -45,22 +43,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         stream: FirebaseService.sensorStream(),
         builder: (BuildContext context, AsyncSnapshot<SensorData> sSnap) {
           final SensorData sensors = sSnap.data ?? SensorData();
-          return StreamBuilder<List<Product>>(
-            stream: FirebaseService.productsStream(),
+          return StreamBuilder<BananaAnalysis>(
+            stream: FirebaseService.bananaAnalysisStream(),
             builder: (BuildContext context,
-                AsyncSnapshot<List<Product>> pSnap) {
-              final List<Product> products = pSnap.data ?? <Product>[];
-              return StreamBuilder<BananaAnalysis>(
-                stream: FirebaseService.bananaAnalysisStream(),
+                AsyncSnapshot<BananaAnalysis> bSnap) {
+              final BananaAnalysis banana = bSnap.data ?? BananaAnalysis();
+              return StreamBuilder<List<Alert>>(
+                stream: FirebaseService.alertsStream(),
                 builder: (BuildContext context,
-                    AsyncSnapshot<BananaAnalysis> bSnap) {
-                  final BananaAnalysis banana =
-                      bSnap.data ?? BananaAnalysis();
-                  final List<Alert> alerts = AlertService.derive(
-                    sensors: sensors,
-                    products: products,
-                    banana: banana,
-                  );
+                    AsyncSnapshot<List<Alert>> aSnap) {
+                  final List<Alert> alerts = aSnap.data ?? <Alert>[];
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
                     children: <Widget>[
@@ -237,11 +229,12 @@ class _BananaCard extends StatelessWidget {
         child: ListTile(
           leading: Icon(Icons.local_florist, color: StatusColors.neutral),
           title: Text('No banana analysis yet'),
-          subtitle: Text('The backend writes a result after each cycle.'),
+          subtitle: Text('The image analysis service writes a result after '
+              'each cycle.'),
         ),
       );
     }
-    final Color color = StatusColors.forBananaStatus(banana.status);
+    final Color color = StatusColors.forBananaStatus(banana.visualStatus);
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
@@ -257,9 +250,19 @@ class _BananaCard extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
-                Text(banana.status,
-                    style: TextStyle(
-                        color: color, fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(banana.visualStatus,
+                      style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -272,14 +275,16 @@ class _BananaCard extends StatelessWidget {
                 color: color,
               ),
             ),
-            if (banana.needsWarning) ...<Widget>[
-              const SizedBox(height: 10),
-              Text(banana.warningMessage,
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-            ],
+            const SizedBox(height: 10),
+            Text('Recommendation: ${banana.status}',
+                style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(banana.message,
+                style: const TextStyle(
+                    fontSize: 12, color: Colors.black54)),
           ],
         ),
       ),

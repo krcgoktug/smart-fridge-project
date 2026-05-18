@@ -35,9 +35,30 @@ class ProductCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(product.productName,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600)),
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(product.productName,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600)),
+                      ),
+                      if (product.category.isNotEmpty) ...<Widget>[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(product.category,
+                              style: const TextStyle(
+                                  fontSize: 10, color: Colors.black54)),
+                        ),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     product.expiryDate.isEmpty

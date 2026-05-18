@@ -1,15 +1,17 @@
 import 'package:firebase_database/firebase_database.dart';
 
 import '../app_config.dart';
+import '../models/alert.dart';
 import '../models/banana_analysis.dart';
+import '../models/camera_status.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 
 /// Read-only data access layer.
 ///
 /// The Flutter app is a pure visualization layer: it only **reads** from
-/// Firebase Realtime Database. The ESP32 boards and the Python backend are
-/// the only writers.
+/// Firebase Realtime Database. The ESP32 boards and the image analysis
+/// service are the only writers.
 ///
 /// When [ready] is false (Firebase not configured for a real project), the
 /// streams emit empty data so the UI shows honest "offline / no data" states
@@ -26,6 +28,14 @@ class FirebaseService {
     if (!ready) return Stream<SensorData>.value(SensorData());
     return _root.child('sensors').onValue.map(
           (DatabaseEvent e) => SensorData.fromMap(_asMap(e.snapshot.value)),
+        );
+  }
+
+  /// Live ESP32-CAM online status.
+  static Stream<CameraStatus> cameraStatusStream() {
+    if (!ready) return Stream<CameraStatus>.value(CameraStatus());
+    return _root.child('camera').onValue.map(
+          (DatabaseEvent e) => CameraStatus.fromMap(_asMap(e.snapshot.value)),
         );
   }
 
@@ -53,6 +63,26 @@ class FirebaseService {
           (DatabaseEvent e) =>
               BananaAnalysis.fromMap(_asMap(e.snapshot.value)),
         );
+  }
+
+  /// Live list of alerts published by the image analysis service.
+  static Stream<List<Alert>> alertsStream() {
+    if (!ready) return Stream<List<Alert>>.value(<Alert>[]);
+    return _root.child('alerts').onValue.map((DatabaseEvent e) {
+      final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
+      if (map == null) return <Alert>[];
+      final List<Alert> list = <Alert>[];
+      map.forEach((dynamic key, dynamic value) {
+        final Map<dynamic, dynamic>? am = _asMap(value);
+        if (am != null) list.add(Alert.fromMap(am));
+      });
+      list.sort((Alert a, Alert b) {
+        final int bySeverity = a.severityRank.compareTo(b.severityRank);
+        if (bySeverity != 0) return bySeverity;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return list;
+    });
   }
 
   static Map<dynamic, dynamic>? _asMap(Object? value) {

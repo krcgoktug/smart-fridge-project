@@ -85,16 +85,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
 
-          // --- Hardware mode note ---
+          // --- Camera note ---
           const Card(
             color: Color(0xFFFFF3CD),
             child: Padding(
               padding: EdgeInsets.all(14),
               child: Text(
-                'Hardware Mode (live ESP32-CAM stream) requires the Android '
-                'app or a local Flutter run on the same Wi-Fi. The GitHub '
-                'Pages site is HTTPS, so browsers block the HTTP camera '
-                'stream — it is a UI demo only.',
+                'The live ESP32-CAM stream needs the Android app or a local '
+                'run on the same Wi-Fi as the camera. A web build served over '
+                'HTTPS cannot show the HTTP camera stream (browser '
+                'mixed-content policy). See docs/camera-limitations.md.',
                 style: TextStyle(fontSize: 12.5, height: 1.4),
               ),
             ),
@@ -133,7 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: <Widget>[
               _Row(label: 'Sensor node', value: 'ESP32 DevKit V1'),
               _Row(label: 'Camera node', value: 'ESP32-CAM AI-Thinker'),
-              _Row(label: 'Processing', value: 'Python backend (QR + CV)'),
+              _Row(label: 'Processing', value: 'Image analysis service'),
               _Row(label: 'This app', value: 'Read-only dashboard'),
             ],
           ),
