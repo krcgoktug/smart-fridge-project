@@ -1,36 +1,26 @@
-# ESP32 DevKit V1 — Sensor Controller Firmware
+# ESP32 DevKit — Sensor Controller
 
-The sensor controller of the Smart Fridge. It reads three sensors and pushes
-a **heartbeat** to Firebase Realtime Database every 10 seconds.
-
-It does **not** touch the camera and does **not** do any QR / image work.
-
-## Firebase output
-
-Path: `devices/fridge_01/sensors`
+Reads DHT11 (temperature + humidity), MQ135 (gas) and HX711 (weight) and
+uploads the live values to Firebase Realtime Database at
+`devices/fridge_01/sensors`.
 
 ```json
-{
-  "weight": 482,
-  "temperature": 5.8,
-  "humidity": 47,
-  "gas": 1350,
-  "updatedAt": 1710000000,
-  "alive": true
-}
+{ "temperature": 6.4, "humidity": 73, "gasValue": 1350,
+  "weight": 482, "updatedAt": 1710000000 }
 ```
 
-`updatedAt` is a real Unix timestamp (NTP). The Flutter app shows
-**"ESP32 Offline"** when it is older than 60 seconds.
+The sensor data is in the cloud, so **every team member sees it live** in the
+app — even though the ESP32 is plugged into only one computer by USB.
 
-## 1. Required tools
+## 1. Tools
 
 - [Arduino IDE](https://www.arduino.cc/en/software) 2.x.
-- ESP32 board support — Boards Manager URL:
+- ESP32 board support — add this Boards Manager URL and install
+  **esp32 by Espressif Systems**:
   `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
-  then install **esp32 by Espressif Systems**. Board: **ESP32 Dev Module**.
+- Board: **ESP32 Dev Module**.
 
-## 2. Required libraries (Library Manager)
+## 2. Libraries (Library Manager)
 
 | Library | Author |
 |---------|--------|
@@ -39,14 +29,14 @@ Path: `devices/fridge_01/sensors`
 | HX711 | Bogdan Necula |
 | ArduinoJson | Benoit Blanchon (v6 or v7) |
 
-## 3. Configure secrets
+## 3. Configure
 
 ```
 cp secrets.example.h secrets.h
 ```
 
-Fill in Wi-Fi SSID/password, the Firebase database URL and auth token.
-`secrets.h` is git-ignored — never commit it.
+Fill in Wi-Fi SSID/password, the Firebase database URL and auth token in
+`secrets.h` (git-ignored — never commit it).
 
 ## 4. Wiring
 
@@ -55,37 +45,26 @@ See [../../docs/wiring.md](../../docs/wiring.md).
 | Function | GPIO |
 |----------|------|
 | DHT11 DATA | 4 |
-| MQ135 AOUT | 34 (ADC, input-only) |
+| MQ135 AOUT | 34 |
 | HX711 DT | 16 |
 | HX711 SCK | 17 |
 
-## 5. Upload
+## 5. Upload & verify
 
-1. Open `esp32-devkit.ino`, select **ESP32 Dev Module** and the port.
-2. **Upload**, then open the **Serial Monitor** at **115200 baud**.
-
-Expected output:
+1. Open `esp32-devkit.ino`, select **ESP32 Dev Module** + the COM port.
+2. **Upload**, then open **Serial Monitor** at **115200 baud**:
 
 ```
 === Zero Waste Smart Fridge -- ESP32 Sensor Controller ===
 [HX711] connected and tared.
 [WiFi] Connected. IP: 192.168.1.42
-[Read] W=482g  T=5.8C  H=47%  Gas=1350
-[Heartbeat] sent -> devices/fridge_01/sensors
+[Read] T=6.4C  H=73%  Gas=1350  W=482g
+[Upload] OK -> devices/fridge_01/sensors
 ```
 
-## 6. Notes
+## Notes
 
-- The **HX711 is optional**: without load cells the weight reads `0 g` and
-  everything else still works.
+- The HX711 is optional — without load cells the weight reads `0 g`.
 - The MQ135 needs ~1-2 minutes to warm up.
-- If the board is powered off, the app shows "ESP32 Offline" after 60 s.
-
-## 7. Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `DHT11 read failed` | Check 3V3, data on GPIO 4, add a 10k pull-up |
-| Weight is wrong | Calibrate `HX711_CALIBRATION_FACTOR` |
-| `Heartbeat failed, HTTP 401` | Wrong `FIREBASE_AUTH` or database rules |
-| App shows "ESP32 Offline" | Board offline, Wi-Fi down, or NTP not synced |
+- If the board stops uploading, the app shows **"ESP32 Sensor Board Offline"**
+  after 60 seconds (stale `updatedAt`).

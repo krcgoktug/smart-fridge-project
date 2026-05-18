@@ -3,20 +3,17 @@
  *  Zero Waste Smart Fridge  --  ESP32-CAM AI-Thinker  --  Camera Node
  * ==========================================================================
  *
- *  CAMERA ONLY. This board:
- *    - runs an always-on MJPEG stream,
- *    - exposes a single-frame snapshot endpoint,
- *    - does NOT decode QR codes,
- *    - does NOT run any AI / image processing,
- *    - does NOT talk to Firebase.
+ *  CAMERA ONLY. This board runs an always-on CameraWebServer so the mobile
+ *  app can show the live stream and grab frames to read product QR codes.
  *
- *  All QR decoding and banana analysis is done by the Python backend, which
- *  pulls frames from these endpoints.
- *
- *  ENDPOINTS (at the IP printed on the serial monitor):
+ *  ENDPOINTS (at the LOCAL IP printed on the serial monitor):
  *    GET /          -> HTML page with the live stream
  *    GET /stream    -> continuous multipart MJPEG stream
  *    GET /capture   -> a single JPEG frame
+ *
+ *  Each ESP32-CAM gets its OWN local IP from the Wi-Fi router, so the IP is
+ *  entered into the app's Camera screen (it is never hard-coded).
+ *  The board does NOT decode QR codes and does NOT talk to Firebase.
  *
  *  ------------------------------------------------------------------------
  *  BOARD: "AI Thinker ESP32-CAM"   (Tools -> Board)
@@ -206,12 +203,14 @@ void setup() {
   startCameraServer();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("[Ready] stream  : http://");
-    Serial.println(WiFi.localIP());
-    Serial.print("[Ready] capture : http://");
-    Serial.print(WiFi.localIP());
-    Serial.println("/capture");
-    Serial.println("[Ready] Put this IP into the backend .env and the app.");
+    String ip = WiFi.localIP().toString();
+    Serial.println();
+    Serial.println("Camera Ready!");
+    Serial.println("Local IP: " + ip);
+    Serial.println("Stream:   http://" + ip + "/stream");
+    Serial.println("Capture:  http://" + ip + "/capture");
+    Serial.println();
+    Serial.println(">> Enter this IP in the app's Camera screen.");
   }
 }
 
