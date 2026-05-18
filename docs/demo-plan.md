@@ -1,96 +1,69 @@
 # Demo Plan
 
-A step-by-step script for presenting the Zero Waste Smart Fridge in class.
-Target duration: **8-10 minutes**.
+A script for presenting the Zero Waste Smart Fridge. Target: **8-10 minutes**.
 
 ---
 
-## 0. Before the demo (setup checklist)
+## 0. Before the demo
 
-- [ ] Both ESP32 boards powered and connected to the same Wi-Fi as the phone.
-- [ ] Firebase Realtime Database reachable; rules allow read/write for the demo.
-- [ ] Mobile app installed on the phone, `flutterfire configure` already run.
-- [ ] At least 3 products with printed QR stickers ready (e.g. banana, milk,
-      egg box).
-- [ ] One **slightly browned banana** prepared for the visual detection part.
-- [ ] ESP32-CAM stream URL confirmed working in a browser.
-- [ ] Optional Python backend running (for live browning analysis).
+- [ ] ESP32 DevKit + ESP32-CAM powered, on the same Wi-Fi as the laptop/phone.
+- [ ] Firebase Realtime Database reachable.
+- [ ] Python backend running (`python app.py`) on the laptop.
+- [ ] Android app installed on the phone (or `flutter run` locally), with the
+      ESP32-CAM IP set in **Settings**.
+- [ ] A few products with printed QR stickers.
+- [ ] One slightly-browned banana.
 
 ---
 
 ## 1. Introduction (1 min)
 
-Explain the problem: households throw away food because they forget about it.
-The Smart Fridge watches the products and warns the user early.
+Explain the problem (forgotten food is wasted) and the four-layer
+architecture: ESP32 sensors, ESP32-CAM, Python CV backend, Flutter app.
+Show the box with the two ESP32 boards.
 
-Show the physical box (47 x 72.5 x 36.2 cm) with the two ESP32 boards.
+## 2. Sensors + offline behavior (2 min)
 
-## 2. Sensor node + offline behavior (2 min)
-
-1. Open the **Dashboard** screen.
-2. Point out the **ESP32 Sensor Status** card and live temperature, humidity,
-   gas value and weight.
-3. Briefly breathe near the MQ135 or open an over-ripe item — watch the gas
-   value rise and the global risk score react.
-4. (Optional) Power off the ESP32 DevKit — after ~60 s the card flips to
-   *"ESP32 not connected"*. Stress that QR scanning and the camera still work.
+1. Open the **Dashboard** — show the **ESP32 Online** card and the live
+   weight / temperature / gas values updating every 10 s.
+2. Power off the ESP32 DevKit — after ~60 s the card flips to **ESP32
+   Offline** and an alert appears. Stress that the camera and backend keep
+   working. Power it back on.
 
 ## 3. QR product registration (2 min)
 
-1. Open the **Camera** screen.
-2. Tap **"Scan QR from Camera"** — the app captures an image from the
-   ESP32-CAM and decodes the product QR code.
-3. Show the parsed product (name, category, expiry date), confirm, and save.
-4. Switch to **Products** — the product appears with its expiry date,
-   remaining days/hours and an expiry status (`Fresh` / `Expiring Soon` /
-   `Expired`).
-
-> Demo without hardware: in **Demo mode** the same button uses a bundled
-> sample QR image, so the whole decode-and-register flow still runs.
+1. Hold a product QR code in front of the ESP32-CAM.
+2. The **backend** decodes it (OpenCV + pyzbar) and writes the product to
+   Firebase — point at the backend console log.
+3. Open the **Products** screen — the product appears on its own with its
+   expiry date and status (Fresh / Expiring Soon / Expired).
 
 ## 4. Banana browning analysis (2 min)
 
-1. On the **Camera** screen tap **"Analyze Banana"** (or open the
-   **Banana Analysis** screen).
-2. The app captures an image and runs pixel-based browning analysis.
-3. Show the result: `brownSpotPercentage`, `darkSpotPercentage`,
-   `totalBrowningPercentage` and the `visualStatus`.
-4. Point out the warning — *"Banana browning detected. Consume soon."* — when
-   browning is significant.
+1. Place the browned banana in front of the ESP32-CAM.
+2. The backend runs the HSV pixel analysis each cycle and writes
+   `brownPercent` + `status` to Firebase.
+3. On the **Dashboard**, show the banana card: the browning percentage and
+   the status (Fresh / Warning / Rotten) with a warning message.
 
-> Demo without hardware: Demo mode analyzes a bundled sample banana image.
+## 5. Live camera + alerts (1-2 min)
 
-## 5. Risk score + alerts (1-2 min)
-
-1. Back on the **Dashboard**, show the global status moving from `Fresh` to
-   `Consume Soon` / `Spoilage Risk`.
-2. Open the **Alerts** screen — show the generated expiry / spoilage alerts.
-3. Explain the risk formula briefly (expiry + temperature + humidity + gas +
-   visual + weight), and that it is a *relative* estimate.
+1. Open the **Camera** screen — show the live MJPEG stream from the ESP32-CAM.
+2. Open the **Alerts** screen — show alerts derived from the data (expiring
+   products, offline board, rotten banana).
 
 ## 6. Wrap-up (1 min)
 
-- Summarize: sensors + camera + QR + cloud + app working together.
-- Mention possible extensions: more cameras, push notifications, ML model.
+- Recap: real sensors, a real camera, real computer vision (QR + HSV), a real
+  cloud database, and a clean read-only app — no fake AI.
+- Mention the GitHub Pages UI demo and the Android APK in CI.
 
 ---
 
-## Fallback plan (if hardware/Wi-Fi fails)
+## Notes / fallback
 
-- Use a **second phone or browser** as a hotspot so all devices share a network.
-- If a sensor board is offline: the app still works against Firebase — import
-  `docs/demo-seed.json` at the database root (Realtime Database -> three-dot
-  menu -> Import JSON) to populate sensors, camera, products and alerts.
-- If the camera is offline: use a pre-captured banana image with the Python
-  backend in file mode.
-- Keep screen recordings of a successful run as a last-resort backup.
-
----
-
-## Roles (for a team demo)
-
-| Role | Task |
-|------|------|
-| Presenter | Talks through the script |
-| App driver | Operates the phone |
-| Hardware helper | Handles products, box, sensors |
+- The deployed GitHub Pages site is **UI only** — the live camera needs the
+  Android app or a local run (HTTPS blocks the HTTP camera stream).
+- No hardware? Import [demo-seed.json](demo-seed.json) at the Realtime
+  Database root to populate the app for a UI walkthrough.
+- Keep a screen recording of a successful run as a last-resort backup.

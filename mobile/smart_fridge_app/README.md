@@ -1,108 +1,99 @@
 # Smart Fridge — Flutter App
 
-The mobile application for the Zero Waste Smart Fridge. It reads live data
-from Firebase Realtime Database, scans product QR codes, computes per-product
-and global risk scores, and shows alerts.
+The **visualization layer** of the Zero Waste Smart Fridge. It is a
+**read-only** dashboard: it reads Firebase Realtime Database and displays the
+ESP32-CAM stream. It does **no** writing, **no** QR decoding and **no** image
+processing — the ESP32 boards and the Python backend do that.
 
 ## Screens
 
-| # | Screen | Purpose |
-|---|--------|---------|
-| 1 | Dashboard | Sensors, global risk, camera preview, latest alerts |
-| 2 | Product List | All products with status + risk color |
-| 3 | Add Product / QR Scan | Scan a QR code (or manual entry) |
-| 4 | Product Detail | QR metadata, weight, visual status, risk breakdown |
-| 5 | Camera View | Live ESP32-CAM image + endpoint URLs |
-| 6 | Alerts | Notification list (swipe to dismiss) |
-| 7 | Settings | Firebase/hardware/risk-model info |
+| Screen | Shows |
+|--------|-------|
+| Dashboard | ESP32 online/offline, live sensors, banana analysis, alerts |
+| Products | QR-detected products with expiry status |
+| Camera | Live ESP32-CAM MJPEG stream |
+| Alerts | Alerts derived on-device from the live data |
+| Settings | ESP32-CAM IP, Firebase status, hardware-mode note |
 
 ## Project layout
 
 ```
 lib/
-  main.dart                 App entry + bottom-navigation shell
-  app_config.dart           Device id, categories, constants
-  firebase_options.dart     PLACEHOLDER config (replace via flutterfire)
-  models/                   Product, SensorData, Alert
+  main.dart                  App entry + bottom navigation
+  app_config.dart            Device id / database root
+  firebase_options.dart      PLACEHOLDER config (replace via flutterfire)
+  models/                    SensorData, Product, BananaAnalysis, Alert
   services/
-    firebase_service.dart   Realtime Database streams + writes
-    risk_service.dart       Risk score algorithm (canonical implementation)
-  utils/status_colors.dart  Green / yellow / red palette
-  widgets/                  SensorCard, ProductCard, StatusBadge, ...
-  screens/                  The seven screens above
+    firebase_service.dart    Read-only Realtime Database streams
+    alert_service.dart       Derives alerts from the data
+    settings_service.dart    Persists the ESP32-CAM address
+  utils/status_colors.dart   Green / amber / red palette
+  widgets/                   SensorCard, ProductCard, StatusBadge
+  screens/                   The five screens above
 ```
 
 ## Prerequisites
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.3 or newer.
-- A device or emulator (QR scanning needs a **real device** with a camera;
-  use the manual-entry fallback on emulators).
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.27 or newer.
+- A device/emulator. For the **live camera** the device must be on the same
+  Wi-Fi as the ESP32-CAM.
 
 ## Setup
-
-The `android/` and `web/` platform folders are committed, so the app is
-runnable straight after cloning:
 
 ```bash
 cd mobile/smart_fridge_app
 flutter pub get
 ```
 
-> iOS is not committed. To add it: `flutter create --platforms=ios .`
+### Firebase
 
-### Firebase configuration
-
-The committed `lib/firebase_options.dart` contains **placeholder** values, so
-the app compiles and opens but shows a "Firebase not configured" notice.
-Connect it to your own Firebase project:
+`lib/firebase_options.dart` ships with **placeholder** values, so the app
+compiles and opens but shows empty / "ESP32 Offline" states. Connect a real
+project:
 
 ```bash
-# install the FlutterFire CLI once
 dart pub global activate flutterfire_cli
-
-# generate real lib/firebase_options.dart and native config
 flutterfire configure
 ```
-
-Make sure **Realtime Database** is enabled in the Firebase console and that the
-database layout matches [../../docs/firebase-schema.json](../../docs/firebase-schema.json).
 
 ## Run
 
 ```bash
-flutter run
+flutter run                 # device / emulator / -d chrome
 ```
 
-### Optional: Flutter Web demo
+### Android APK
 
 ```bash
-flutter run -d chrome
-# or build a static bundle:
+flutter build apk --release
+# output: build/app/outputs/flutter-apk/app-release.apk
+```
+
+The repo also builds the APK in CI — see
+[`.github/workflows/build-apk.yml`](../../.github/workflows/build-apk.yml);
+download it from the **Actions** tab.
+
+### Web
+
+```bash
 flutter build web
 ```
 
-The `build/web` output can be deployed to Firebase Hosting or Vercel. Note
-that the live ESP32-CAM image is a LAN HTTP URL, so the camera preview only
-works on a device on the same Wi-Fi network.
+> The web build is **UI only**. On the HTTPS GitHub Pages site browsers block
+> the ESP32-CAM's HTTP stream (mixed content). Use the Android app or a local
+> run for the real camera stream.
 
-## How the app uses Firebase
+## Camera address
 
-| Path | App behavior |
-|------|--------------|
-| `sensors` | Read live; feeds the dashboard and risk recompute |
-| `camera` | Read `captureUrl` for the camera preview |
-| `products` | Read all; QR scan / manual entry writes new products |
-| `alerts` | Read all; writes an alert when a product is added |
-
-The app recomputes every product's risk score on the fly from the latest
-sensor values using `risk_service.dart`, so the displayed score always
-reflects current conditions.
+The ESP32-CAM IP is **not hard-coded**. Set it in the app under
+**Settings → ESP32-CAM address** (e.g. `http://192.168.1.50`). The Camera
+screen then shows `http://<ip>/stream`.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| "Firebase not configured" everywhere | Run `flutterfire configure`, restart |
-| Build fails: no ios folder | Run `flutter create --platforms=ios .` |
-| QR scanner is black | Use a real device; grant camera permission |
-| Camera preview fails | Phone must be on the same Wi-Fi as the ESP32-CAM |
+| Everything empty / "ESP32 Offline" | Firebase not configured — run `flutterfire configure` |
+| Camera screen blank | Set the ESP32-CAM IP in Settings; same Wi-Fi |
+| Camera works on phone, not on web | Expected — HTTPS blocks the HTTP stream |
+| Build fails: no `android/` folder | Run `flutter create --platforms=android,web .` |

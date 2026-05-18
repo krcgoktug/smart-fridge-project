@@ -14,12 +14,12 @@ import 'utils/status_colors.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load persisted settings (e.g. the ESP32-CAM address).
+  // Load persisted settings (the ESP32-CAM address).
   await SettingsService.init();
 
-  // Try to initialise Firebase. With the committed placeholder config this
-  // succeeds structurally; data calls only work once the user runs
-  // `flutterfire configure`. If init throws, the app still opens.
+  // Initialise Firebase. With the committed placeholder firebase_options.dart
+  // the app still opens; data screens show honest "offline / no data" states
+  // until a real project is configured via `flutterfire configure`.
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -64,7 +64,7 @@ class SmartFridgeApp extends StatelessWidget {
   }
 }
 
-/// Bottom-navigation shell holding the five primary screens.
+/// Bottom-navigation shell holding the five screens.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -86,14 +86,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: <Widget>[
-          if (FirebaseService.demoMode) const _DemoBanner(),
-          Expanded(
-            child: IndexedStack(index: _index, children: _screens),
-          ),
-        ],
-      ),
+      body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (int i) => setState(() => _index = i),
@@ -119,37 +112,6 @@ class _HomeShellState extends State<HomeShell> {
               selectedIcon: Icon(Icons.settings),
               label: 'Settings'),
         ],
-      ),
-    );
-  }
-}
-
-/// Thin strip shown when the app runs on built-in demo data.
-class _DemoBanner extends StatelessWidget {
-  const _DemoBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Material(
-      color: Color(0xFFFFF3CD),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            children: <Widget>[
-              Icon(Icons.info_outline, size: 16, color: Color(0xFF8A6D00)),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Demo mode - sample data. Run "flutterfire configure" '
-                  'to connect your own Firebase project.',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF8A6D00)),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

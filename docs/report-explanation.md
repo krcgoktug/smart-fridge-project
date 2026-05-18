@@ -1,141 +1,113 @@
 # University Report Explanation
 
-This document explains the project in report form. It can be pasted into a
-university report and adapted. Each section maps to a typical report chapter.
+Report-style explanation of the project. Each section maps to a typical
+report chapter and can be adapted.
 
 ---
 
 ## 1. Abstract
 
-The Zero Waste Smart Fridge is an Internet-of-Things (IoT) system that reduces
-household food waste by monitoring stored products and warning the user before
-food spoils. It uses two ESP32 microcontrollers, environmental sensors, a
-camera, QR-code product identification, a cloud database, and a mobile
-application. Instead of predicting an exact spoilage time, the system computes
-a *relative* risk score from several independent signals and presents an easy
-green/yellow/red status to the user.
+The Zero Waste Smart Fridge is a real-time Internet-of-Things system that
+helps reduce household food waste. It combines environmental sensing, a
+camera, classic computer vision, a cloud database and a mobile application.
+The architecture is split into four independent layers so that each component
+has a single, clearly defined responsibility.
 
 ## 2. Problem statement
 
-A large share of household food is wasted because items are forgotten at the
-back of the fridge or their expiry dates are not tracked. A purely manual
-approach fails because people do not remember every product. The project
-addresses this with continuous, automatic monitoring.
+Households waste food because items are forgotten or their expiry dates are
+not tracked. The system addresses this with continuous automatic monitoring
+and an easy-to-read dashboard that warns the user early.
 
-## 3. Objectives
+## 3. System architecture
 
-1. Measure the storage environment (temperature, humidity, gas, weight).
-2. Identify each product reliably using QR codes.
-3. Detect visible spoilage for fruit (banana browning) with lightweight image
-   processing.
-4. Combine all signals into a single, understandable risk score.
-5. Present the information and alerts in a clean mobile app.
+The system has four layers:
 
-## 4. System design
+1. **Sensing layer — ESP32 DevKit V1.** Reads an HX711 load cell (weight), a
+   DHT11 sensor (temperature) and an MQ135 sensor (gas). Every 10 seconds it
+   sends a heartbeat to the cloud database. The heartbeat carries an NTP
+   timestamp, so the application can reliably detect when the board goes
+   offline (no update for 60 seconds).
 
-### 4.1 Hardware
+2. **Vision-input layer — ESP32-CAM.** An always-on camera that exposes an
+   MJPEG stream and a snapshot endpoint over HTTP. It performs no processing;
+   it only provides images.
 
-- **ESP32 DevKit V1** reads an MQ135 gas sensor, a DHT11 temperature/humidity
-  sensor, and an HX711 amplifier connected to four load cells. It computes a
-  sensor-side risk value and uploads JSON to the cloud.
-- **ESP32-CAM AI Thinker** runs the standard `CameraWebServer` and exposes a
-  stream and a capture endpoint. It is deliberately limited to image serving;
-  no decoding or AI runs on it, because the module has little free memory once
-  the camera driver is loaded.
+3. **Processing layer — Python backend.** The intelligent layer. It runs a
+   continuous loop: it pulls a frame from the camera, decodes any QR code with
+   OpenCV and pyzbar, and analyses banana browning with classic HSV colour
+   thresholding. Results are written to the cloud database.
 
-### 4.2 Cloud
+4. **Visualization layer — Flutter application.** A read-only dashboard that
+   reads the cloud database and displays the live camera stream. It does no
+   processing of its own.
+
+The layers communicate only through Firebase Realtime Database, which acts as
+a message bus. This separation makes the system robust: any layer can fail
+without breaking the others.
+
+## 4. QR-based product registration
+
+Each product carries a printed QR code containing a small JSON payload with
+the product name and expiry date. The backend decodes this from the camera
+image and registers the product. The application then shows each product with
+an expiry-based status: Fresh, Expiring Soon, or Expired.
+
+## 5. Banana browning analysis
+
+Banana spoilage is estimated with **real pixel-based computer vision**, not
+machine learning. A camera frame is converted to the HSV colour space.
+Healthy yellow flesh, brown overripe regions and dark spots are isolated with
+colour thresholds. The spoilage estimate is the ratio of brown and dark
+pixels to the whole banana region:
+
+```
+brownPercent = (brown + dark pixels) / banana region pixels * 100
+```
+
+The percentage maps to a status: Fresh (0-15 %), Warning (15-35 %) or
+Rotten (35 %+). This approach is fast, needs no training data, is fully
+explainable, and is appropriate for a constrained embedded project.
+
+## 6. Cloud database
 
 Firebase Realtime Database stores a small JSON tree under
-`/devices/fridge_01`. Realtime Database was chosen over Firestore because the
-data set is small, changes frequently, and the ESP32 client libraries for RTDB
-are simple and well supported.
+`devices/fridge_01`: `sensors`, `products` and `bananaAnalysis`. Realtime
+Database was chosen because the data set is small and frequently updated, and
+because it pushes changes to the application in real time.
 
-### 4.3 Software
+## 7. Offline behavior
 
-A Flutter mobile application provides seven screens (dashboard, product list,
-add product / QR scan, product detail, camera view, alerts, settings). An
-optional Python service performs banana browning analysis on captured images.
+Because the layers are independent, a missing component degrades the system
+gracefully rather than breaking it. If the ESP32 sensor board stops sending
+heartbeats, the application detects the stale timestamp and displays
+"ESP32 Offline" while the camera and product features keep working.
 
-## 5. Risk score methodology
+## 8. Implementation and testing
 
-The risk score is intentionally a **heuristic**, not a physical spoilage model.
-It sums six bounded components:
-
-```
-riskScore = expiryRisk + temperatureRisk + humidityRisk
-          + gasRisk + visualRisk + weightRisk      (clamped 0..100)
-```
-
-- **expiryRisk** grows as the printed expiry date approaches.
-- **temperatureRisk / humidityRisk** grow when the environment leaves the ideal
-  cold-storage range.
-- **gasRisk** reflects the MQ135 reading; decomposing food releases gases.
-- **visualRisk** reflects measured banana browning.
-- **weightRisk** reflects unexpected weight deviation (leak, spill, tampering).
-
-Different categories use different components, because, for example, a sealed
-milk carton is not meaningfully assessed by a gas sensor or browning analysis.
-The final score maps to three bands: Fresh (0-39), Consume Soon (40-69), and
-Spoilage Risk (70-100).
-
-This design is justified for a university project because it is transparent,
-explainable, requires no training data, and runs on constrained hardware.
-
-## 6. Banana browning analysis
-
-Banana browning is measured with classic pixel-based image processing rather
-than machine learning. A still image from the ESP32-CAM is examined pixel by
-pixel using simple RGB / HSV thresholds, classifying each pixel as a brown
-spot, a dark spot, or ordinary banana / background. The result is three
-figures — `brownSpotPercentage`, `darkSpotPercentage` and their sum
-`totalBrowningPercentage` — which map to a `visualStatus` of Fresh, Slight
-Browning, Browning Detected or Consume Soon. This is fast, needs no dataset,
-and runs on the phone or a small Python service. The analysis is triggered by
-the user ("Analyze Banana"); it does not depend on the load cells. The
-trade-off is sensitivity to lighting, mitigated by the enclosed box.
-
-## 6a. Independent devices and offline behavior
-
-The two ESP32 boards are intentionally independent. The camera never waits for
-a load-cell event, and the sensor board is optional: its readings carry a real
-NTP timestamp, so when it stops reporting the app marks it offline after 60
-seconds and shows "ESP32 not connected" while QR scanning and banana analysis
-continue to work. This makes the system robust for a live demonstration.
-
-## 7. Implementation summary
-
-The repository contains: firmware for both ESP32 boards, a Flutter application,
-an optional Python backend, sample QR product definitions, and full
-documentation. Secrets are never committed; template files and `.gitignore`
-entries keep Wi-Fi and Firebase credentials out of version control.
-
-## 8. Testing
-
-- **Sensors**: compared DHT11 readings against a reference thermometer;
-  verified MQ135 response by introducing decaying food; calibrated the HX711
-  with known weights.
-- **QR**: validated parsing with the sample products in `qr-samples/`.
-- **Risk score**: checked boundary values for each component and band.
-- **App**: verified each screen against seeded Firebase data.
+The repository contains the ESP32 firmware, the Python backend, the Flutter
+application and full documentation. The backend's QR decoding was verified
+with printed sample codes; the banana analysis was checked against images
+with known browning; the application was tested against seeded database data.
+No secrets are committed — credentials use template files and `.gitignore`.
 
 ## 9. Limitations
 
-- The risk score is relative and heuristic, not a calibrated spoilage model.
+- The banana analysis is colour-threshold based and is sensitive to lighting;
+  the enclosed box mitigates this.
 - The MQ135 is uncalibrated and gives a qualitative gas trend only.
-- Browning detection is lighting-sensitive.
-- A single camera cannot see every product clearly.
+- The deployed web build cannot show the live camera, because browsers block
+  HTTP camera streams from an HTTPS page; the Android app is used instead.
 
 ## 10. Future work
 
-- Push notifications for alerts.
-- Multiple cameras or a moving camera.
-- A trained vision model for more product types.
 - Per-product calibration of the gas baseline.
-- Power optimization with deep sleep on the sensor node.
+- More product types in the vision pipeline.
+- Push notifications for alerts.
+- Power optimisation with deep sleep on the sensor node.
 
 ## 11. Conclusion
 
-The project demonstrates a complete, working IoT pipeline — sensing, cloud,
-identification, basic computer vision, and a mobile UI — built around
-affordable ESP32 hardware. It meets its objective of giving users an early,
-understandable warning before food is wasted.
+The project demonstrates a complete, technically honest IoT and computer
+vision pipeline — sensing, an independent camera, real CV processing, a cloud
+database and a mobile dashboard — built from affordable ESP32 hardware.

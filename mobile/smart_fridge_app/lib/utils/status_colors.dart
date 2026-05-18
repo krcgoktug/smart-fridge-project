@@ -1,41 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// Maps risk scores / statuses to the green / yellow / red palette used
-/// across the whole UI.
+/// Green / amber / red palette used across the UI.
 class StatusColors {
   static const Color fresh = Color(0xFF2E7D32); // green
-  static const Color consumeSoon = Color(0xFFF9A825); // amber
-  static const Color spoilage = Color(0xFFC62828); // red
+  static const Color warning = Color(0xFFF9A825); // amber
+  static const Color danger = Color(0xFFC62828); // red
   static const Color neutral = Color(0xFF607D8B); // blue-grey
 
-  /// Color for a 0..100 risk score.
-  static Color forScore(num score) {
-    if (score >= 70) return spoilage;
-    if (score >= 40) return consumeSoon;
-    return fresh;
-  }
-
-  /// Color for a risk-score status string.
-  static Color forStatus(String status) {
-    switch (status) {
-      case 'Spoilage Risk':
-        return spoilage;
-      case 'Consume Soon':
-        return consumeSoon;
-      case 'Fresh':
-        return fresh;
-      default:
-        return neutral;
-    }
-  }
-
-  /// Color for an expiry-based status (Fresh / Expiring Soon / Expired).
+  /// Color for an expiry status (Fresh / Expiring Soon / Expired).
   static Color forExpiryStatus(String status) {
     switch (status) {
       case 'Expired':
-        return spoilage;
+        return danger;
       case 'Expiring Soon':
-        return consumeSoon;
+        return warning;
       case 'Fresh':
         return fresh;
       default:
@@ -43,15 +21,13 @@ class StatusColors {
     }
   }
 
-  /// Color for a banana visual status.
-  static Color forVisualStatus(String status) {
+  /// Color for a banana browning status (Fresh / Warning / Rotten).
+  static Color forBananaStatus(String status) {
     switch (status) {
-      case 'Consume Soon':
-        return spoilage;
-      case 'Browning Detected':
-        return consumeSoon;
-      case 'Slight Browning':
-        return const Color(0xFFEF9A3D);
+      case 'Rotten':
+        return danger;
+      case 'Warning':
+        return warning;
       case 'Fresh':
         return fresh;
       default:
@@ -59,16 +35,13 @@ class StatusColors {
     }
   }
 
-  /// Soft background tint of a status color.
-  static Color tintFor(num score) => forScore(score).withValues(alpha: 0.12);
-
-  /// Color for an alert severity.
+  /// Color for an alert severity (info / warning / danger).
   static Color forSeverity(String severity) {
     switch (severity) {
       case 'danger':
-        return spoilage;
+        return danger;
       case 'warning':
-        return consumeSoon;
+        return warning;
       default:
         return neutral;
     }

@@ -1,92 +1,32 @@
 {
+  "_comment": "Optional test data. Import at the Realtime Database root to see the app populated without running the hardware/backend. Timestamps should be set to a recent Unix time so the ESP32 reads as online.",
   "devices": {
     "fridge_01": {
-      "meta": {
-        "name": "Zero Waste Smart Fridge",
-        "createdAt": 1747440000
-      },
       "sensors": {
-        "temperature": 5.8,
-        "humidity": 72,
-        "gasValue": 1350,
         "weight": 1284,
-        "riskScore": 24,
-        "status": "Fresh",
-        "updatedAt": 1747440000
-      },
-      "camera": {
-        "streamUrl": "http://172.19.15.112",
-        "captureUrl": "http://172.19.15.112/capture",
-        "updatedAt": 1747440000
+        "temperature": 5.8,
+        "gas": 1350,
+        "updatedAt": 1747560000,
+        "alive": true
       },
       "products": {
-        "banana_001": {
-          "productId": "banana_001",
-          "name": "Banana",
-          "category": "Fruit",
-          "brand": "Generic",
-          "expiryDate": "2026-05-20",
-          "addedDate": "2026-05-15",
-          "expectedWeight": 150,
-          "weightMin": 100,
-          "weightMax": 180,
-          "storageType": "Cool",
-          "currentWeight": 142,
-          "browningRatio": 0.32,
-          "visualStatus": "Browning Detected",
-          "remainingHours": 60,
-          "riskScore": 41,
-          "status": "Consume Soon",
-          "updatedAt": 1747440000
-        },
-        "milk_001": {
-          "productId": "milk_001",
-          "name": "Milk",
-          "category": "Dairy",
-          "brand": "Example Brand",
+        "milk": {
+          "productName": "Milk",
           "expiryDate": "2026-05-25",
-          "addedDate": "2026-05-17",
-          "expectedWeight": 1000,
-          "weightMin": 900,
-          "weightMax": 1100,
-          "storageType": "Cold",
-          "currentWeight": 940,
-          "remainingHours": 192,
-          "riskScore": 0,
-          "status": "Fresh",
-          "updatedAt": 1747440000
+          "detectedAt": 1747560000,
+          "source": "qr"
         },
-        "egg_001": {
-          "productId": "egg_001",
-          "name": "Egg Box",
-          "category": "Egg",
-          "brand": "Generic",
-          "expiryDate": "2026-06-01",
-          "addedDate": "2026-05-17",
-          "expectedWeight": 600,
-          "weightMin": 480,
-          "weightMax": 660,
-          "storageType": "Cold",
-          "currentWeight": 540,
-          "remainingHours": 360,
-          "riskScore": 0,
-          "status": "Fresh",
-          "updatedAt": 1747440000
+        "banana": {
+          "productName": "Banana",
+          "expiryDate": "2026-05-20",
+          "detectedAt": 1747560000,
+          "source": "qr"
         }
       },
-      "alerts": {
-        "alert_001": {
-          "message": "Banana expiry date is approaching.",
-          "severity": "warning",
-          "productId": "banana_001",
-          "createdAt": 1747440000
-        },
-        "alert_002": {
-          "message": "Banana browning detected by the camera.",
-          "severity": "warning",
-          "productId": "banana_001",
-          "createdAt": 1747440100
-        }
+      "bananaAnalysis": {
+        "brownPercent": 21.7,
+        "status": "Warning",
+        "analyzedAt": 1747560000
       }
     }
   }

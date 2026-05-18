@@ -1,0 +1,44 @@
+name: Build Android APK
+
+# Builds the release Android APK and uploads it as a downloadable artifact.
+# Hardware Mode (live ESP32-CAM stream) needs the installed Android app,
+# because browsers block the camera's HTTP stream on the HTTPS demo site.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/smart_fridge_app/**"
+      - ".github/workflows/build-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build release APK
+        working-directory: mobile/smart_fridge_app
+        run: |
+          flutter pub get
+          flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-fridge-app-release-apk
+          path: mobile/smart_fridge_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error

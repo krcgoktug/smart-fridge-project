@@ -1,85 +1,29 @@
 {
-  "_comment": "Reference layout for the Firebase Realtime Database. Import the structure (not the live values) or recreate it manually. Timestamps are Unix seconds.",
+  "_comment": "Firebase Realtime Database layout for the Zero Waste Smart Fridge. Recreate this structure or import it. Timestamps are Unix seconds.",
   "devices": {
     "fridge_01": {
-      "meta": {
-        "name": "Zero Waste Smart Fridge",
-        "boxDimensionsCm": { "width": 47, "depth": 36.2, "height": 72.5 },
-        "createdAt": 1710000000
-      },
       "sensors": {
-        "_comment": "Written by the optional ESP32 DevKit. updatedAt is a real Unix time (NTP); the app marks the board offline if it is older than 60 s.",
-        "temperature": 5.8,
-        "humidity": 72,
-        "gasValue": 1350,
+        "_comment": "Written by the ESP32 DevKit every 10 s. The app shows 'ESP32 Offline' when updatedAt is older than 60 s.",
         "weight": 482,
-        "hasLoadCell": true,
-        "riskScore": 64,
-        "status": "Consume Soon",
-        "updatedAt": 1710000000
-      },
-      "camera": {
-        "_comment": "ESP32-CAM endpoints. The camera is independent of the load cells.",
-        "streamUrl": "http://172.19.15.112",
-        "captureUrl": "http://172.19.15.112/capture",
-        "updatedAt": 1710000000
-      },
-      "bananaAnalysis": {
-        "_comment": "Pixel-based banana browning results, keyed by productId. Written by the app or backend after an 'Analyze Banana' run.",
-        "banana_001": {
-          "productId": "banana_001",
-          "brownSpotPercentage": 18.4,
-          "darkSpotPercentage": 6.2,
-          "totalBrowningPercentage": 24.6,
-          "visualStatus": "Slight Browning",
-          "updatedAt": 1710000000
-        }
+        "temperature": 5.8,
+        "gas": 1350,
+        "updatedAt": 1710000000,
+        "alive": true
       },
       "products": {
-        "banana_001": {
-          "productId": "banana_001",
-          "name": "Banana",
-          "category": "Fruit",
-          "brand": "Generic",
-          "expiryDate": "2026-05-20",
-          "addedDate": "2026-05-15",
-          "expectedWeight": 150,
-          "weightMin": 100,
-          "weightMax": 180,
-          "storageType": "Cool",
-          "remainingHours": 48,
-          "browningRatio": 0.32,
-          "visualStatus": "Browning Detected",
-          "currentWeight": 142,
-          "riskScore": 67,
-          "status": "Consume Soon",
-          "updatedAt": 1710000000
-        },
-        "milk_001": {
-          "productId": "milk_001",
-          "name": "Milk",
-          "category": "Dairy",
-          "brand": "Example Brand",
+        "_comment": "Written by the Python backend when it decodes a product QR code. The node key is a slug of the product name.",
+        "milk": {
+          "productName": "Milk",
           "expiryDate": "2026-05-25",
-          "addedDate": "2026-05-17",
-          "expectedWeight": 1000,
-          "weightMin": 900,
-          "weightMax": 1100,
-          "storageType": "Cold",
-          "remainingHours": 192,
-          "currentWeight": 940,
-          "riskScore": 22,
-          "status": "Fresh",
-          "updatedAt": 1710000000
+          "detectedAt": 1710000000,
+          "source": "qr"
         }
       },
-      "alerts": {
-        "alert_001": {
-          "message": "Banana expiry date is approaching.",
-          "severity": "warning",
-          "productId": "banana_001",
-          "createdAt": 1710000000
-        }
+      "bananaAnalysis": {
+        "_comment": "Written by the Python backend after each banana browning analysis cycle.",
+        "brownPercent": 18.4,
+        "status": "Warning",
+        "analyzedAt": 1710000000
       }
     }
   }

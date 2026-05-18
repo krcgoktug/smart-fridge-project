@@ -1,71 +1,48 @@
 # QR Code Generation Guide
 
-Every product in the Smart Fridge carries a QR sticker. The QR code stores a
-small JSON object that fully identifies the product. The mobile app scans it,
-parses the JSON, and saves the product to Firebase.
+Every product carries our own printed QR sticker. The QR stores a small JSON
+payload. The **Python backend** reads it from the camera frame, decodes it
+(OpenCV + pyzbar) and registers the product in Firebase.
 
 ---
 
-## 1. What goes in a QR code
+## 1. QR payload format
 
-Encode **one product object** — exactly the shape used in
-[sample-products.json](sample-products.json):
+Encode **one product object** per QR code:
 
 ```json
-{
-  "productId": "milk_001",
-  "name": "Milk",
-  "category": "Dairy",
-  "brand": "Example Brand",
-  "expiryDate": "2026-05-25",
-  "addedDate": "2026-05-17",
-  "expectedWeight": 1000,
-  "weightMin": 900,
-  "weightMax": 1100,
-  "storageType": "Cold"
-}
+{ "product": "Milk", "expiry": "2026-05-25" }
 ```
-
-> Encode the object only — **not** the whole file and **not** the `products`
-> array wrapper.
-
-### Field reference
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `productId` | string | Unique id, used as the Firebase key |
-| `name` | string | Display name |
-| `category` | string | `Fruit`, `Vegetable`, `Dairy`, `Egg`, `Packaged Food` |
-| `brand` | string | Free text |
-| `expiryDate` | string | `YYYY-MM-DD` |
-| `addedDate` | string | `YYYY-MM-DD` |
-| `expectedWeight` | number | grams |
-| `weightMin` | number | grams, lower acceptable bound |
-| `weightMax` | number | grams, upper acceptable bound |
-| `storageType` | string | `Cold`, `Cool`, `Ambient` |
+| `product` | string | Product name shown in the app |
+| `expiry` | string | Expiry date, `YYYY-MM-DD` |
 
-The `category` value decides which risk components apply — keep it to one of
-the five values above so the app classifies it correctly.
+Sample payloads: [sample-products.json](sample-products.json).
+
+The backend stores the product under `devices/fridge_01/products/<slug>` as:
+
+```json
+{ "productName": "Milk", "expiryDate": "2026-05-25",
+  "detectedAt": 1710000000, "source": "qr" }
+```
 
 ---
 
-## 2. How to generate the QR codes
+## 2. Generating the QR codes
 
-### Option A — Online generator (quickest)
+### Option A — Online generator
 
-1. Open a QR generator that supports raw text (e.g. a "Text" QR mode).
-2. Paste **one minified product JSON object**.
+1. Open any QR generator that accepts raw **text**.
+2. Paste one minified product JSON object, e.g.
+   `{"product":"Milk","expiry":"2026-05-25"}`
 3. Download the PNG and print it as a sticker.
 
-> Minify the JSON (no extra spaces/newlines) so the QR stays low-density and
-> scans reliably. Example minified string:
->
-> `{"productId":"milk_001","name":"Milk","category":"Dairy","brand":"Example Brand","expiryDate":"2026-05-25","addedDate":"2026-05-17","expectedWeight":1000,"weightMin":900,"weightMax":1100,"storageType":"Cold"}`
-
-### Option B — Python (batch, recommended for many products)
+### Option B — Python (batch)
 
 ```bash
-pip install qrcode[pil]
+pip install "qrcode[pil]"
 ```
 
 ```python
@@ -76,33 +53,27 @@ with open("sample-products.json", encoding="utf-8") as f:
 
 for p in products:
     payload = json.dumps(p, separators=(",", ":"))   # minified
-    img = qrcode.make(payload)
-    img.save(f"qr_{p['productId']}.png")
-    print("wrote", f"qr_{p['productId']}.png")
+    qrcode.make(payload).save(f"qr_{p['product'].lower().replace(' ', '_')}.png")
+    print("wrote", p["product"])
 ```
-
-This writes one PNG per product, ready to print.
 
 ---
 
 ## 3. Printing tips
 
-- Print at **least 3 x 3 cm**; bigger is easier to scan.
-- Use a matte sticker so the box light does not cause glare.
-- Stick the QR on a flat part of the package, facing outward.
-- Keep one master sheet of all QR codes for the demo as a backup.
+- Print at least **3 x 3 cm**; bigger scans more reliably.
+- Use a matte sticker to avoid glare under the box light.
+- Face the QR code toward the ESP32-CAM.
+- Keep a master sheet of all QR codes as a demo backup.
 
 ---
 
-## 4. Scan behavior in the app
+## 4. How it is processed
 
-When the **Add Product / QR Scan** screen reads a QR code, the app:
+1. The ESP32-CAM streams frames; the backend pulls a snapshot each cycle.
+2. The backend decodes any QR code in the frame with **OpenCV + pyzbar**.
+3. The JSON payload is parsed and validated (`product` must be non-empty).
+4. The product is written to Firebase; the Flutter app shows it with an
+   expiry status (Fresh / Expiring Soon / Expired).
 
-1. Decodes the text and parses it as JSON.
-2. Validates the required fields and the `category` value.
-3. Shows a confirmation card with the parsed data.
-4. On confirm, writes it to `/devices/fridge_01/products/<productId>` and
-   computes `remainingHours` from `expiryDate`.
-
-If the JSON is malformed or a field is missing, the app shows an error and
-does **not** save the product.
+The ESP32-CAM itself never decodes QR codes — it only provides the image.

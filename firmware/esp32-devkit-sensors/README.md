@@ -1,26 +1,33 @@
-# ESP32 DevKit V1 — Sensor Node Firmware
+# ESP32 DevKit V1 — Sensor Controller Firmware
 
-Reads the MQ135 gas sensor, DHT11 temperature/humidity sensor and an HX711 +
-4 load cells, computes a sensor-side risk estimate, and uploads JSON to the
-Firebase Realtime Database path `/devices/fridge_01/sensors`.
+The sensor controller of the Smart Fridge. It reads three sensors and pushes
+a **heartbeat** to Firebase Realtime Database every 10 seconds.
 
-This board is an **independent, optional sensor node**:
+It does **not** touch the camera and does **not** do any QR / image work.
 
-- It does **not** trigger the camera and does **not** drive product
-  registration — the load cells are simply one more sensor reading.
-- If this board is offline the rest of the system keeps working. The app
-  detects a stale `updatedAt` and shows *"ESP32 not connected"*.
-- `updatedAt` is a real Unix timestamp (synced over NTP), so the app can
-  reliably decide whether the sensor data is fresh.
-- The HX711 is optional too: if no load cells are connected the weight is
-  reported as `0 g` and `hasLoadCell` is `false`.
+## Firebase output
+
+Path: `devices/fridge_01/sensors`
+
+```json
+{
+  "weight": 482,
+  "temperature": 5.8,
+  "gas": 1350,
+  "updatedAt": 1710000000,
+  "alive": true
+}
+```
+
+`updatedAt` is a real Unix timestamp (NTP). The Flutter app shows
+**"ESP32 Offline"** when it is older than 60 seconds.
 
 ## 1. Required tools
 
-- [Arduino IDE](https://www.arduino.cc/en/software) 2.x (or PlatformIO).
-- ESP32 board support: in Arduino IDE add this Boards Manager URL —
-  `https://espressif.github.io/arduino-esp32/package_esp32_index.json` —
-  then install **esp32 by Espressif Systems**.
+- [Arduino IDE](https://www.arduino.cc/en/software) 2.x.
+- ESP32 board support — Boards Manager URL:
+  `https://espressif.github.io/arduino-esp32/package_esp32_index.json`
+  then install **esp32 by Espressif Systems**. Board: **ESP32 Dev Module**.
 
 ## 2. Required libraries (Library Manager)
 
@@ -37,12 +44,12 @@ This board is an **independent, optional sensor node**:
 cp secrets.example.h secrets.h
 ```
 
-Edit `secrets.h` and set your Wi-Fi SSID/password, Firebase database URL and
-auth token. `secrets.h` is git-ignored — never commit it.
+Fill in Wi-Fi SSID/password, the Firebase database URL and auth token.
+`secrets.h` is git-ignored — never commit it.
 
 ## 4. Wiring
 
-See [../../docs/wiring.md](../../docs/wiring.md). Summary:
+See [../../docs/wiring.md](../../docs/wiring.md).
 
 | Function | GPIO |
 |----------|------|
@@ -51,41 +58,33 @@ See [../../docs/wiring.md](../../docs/wiring.md). Summary:
 | HX711 DT | 16 |
 | HX711 SCK | 17 |
 
-## 5. Upload steps
+## 5. Upload
 
-1. Open `esp32-devkit-sensors.ino` in the Arduino IDE.
-2. Select **Tools -> Board -> ESP32 Dev Module**.
-3. Select the correct **Port**.
-4. Click **Upload**.
-5. Open **Serial Monitor** at **115200 baud**.
+1. Open `esp32-devkit-sensors.ino`, select **ESP32 Dev Module** and the port.
+2. **Upload**, then open the **Serial Monitor** at **115200 baud**.
 
-## 6. Calibration
-
-- **Weight** (only if load cells are fitted): place a known weight on the box,
-  read the raw value, and set `HX711_CALIBRATION_FACTOR` so the reported grams
-  match. Flip its sign if the weight reads negative.
-- **Gas**: the MQ135 needs ~1-2 minutes to warm up before readings stabilize.
-- If load cells are fitted the box is **tared at startup**, so it must be
-  empty when the board boots.
-
-## 7. Expected serial output
+Expected output:
 
 ```
-=== Zero Waste Smart Fridge -- ESP32 Sensor Node ===
-[HX711] connected and tared (empty box = 0 g).
+=== Zero Waste Smart Fridge -- ESP32 Sensor Controller ===
+[HX711] connected and tared.
 [WiFi] Connected. IP: 192.168.1.42
-[Read] T=5.8C  H=72%  Gas=1350  W=482g  Risk=24 (Fresh)
-[Upload] sensors OK.
+[Read] W=482g  T=5.8C  Gas=1350
+[Heartbeat] sent -> devices/fridge_01/sensors
 ```
 
-Without load cells the third line shows `W=0g` and `[HX711] not detected`.
+## 6. Notes
 
-## 8. Troubleshooting
+- The **HX711 is optional**: without load cells the weight reads `0 g` and
+  everything else still works.
+- The MQ135 needs ~1-2 minutes to warm up.
+- If the board is powered off, the app shows "ESP32 Offline" after 60 s.
+
+## 7. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `DHT11 read failed` | Check 3V3, data on GPIO 4, add 10k pull-up |
-| Weight is negative | Flip the sign of `HX711_CALIBRATION_FACTOR` |
-| App shows "ESP32 not connected" | Board offline, or NTP not synced — check Wi-Fi |
-| `PATCH ... failed, HTTP 401` | Wrong `FIREBASE_AUTH` or rules block writes |
-| Gas value stuck | Wait for warm-up; confirm AOUT on GPIO 34 |
+| `DHT11 read failed` | Check 3V3, data on GPIO 4, add a 10k pull-up |
+| Weight is wrong | Calibrate `HX711_CALIBRATION_FACTOR` |
+| `Heartbeat failed, HTTP 401` | Wrong `FIREBASE_AUTH` or database rules |
+| App shows "ESP32 Offline" | Board offline, Wi-Fi down, or NTP not synced |

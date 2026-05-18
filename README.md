@@ -1,179 +1,143 @@
 # Zero Waste Smart Fridge
 
-An IoT-based smart food monitoring system that helps reduce household food waste.
-The system tracks products stored inside a transparent plastic box, estimates a
-relative **spoilage risk score** for each item, and warns the user before food
-goes bad.
+A real-time **IoT + computer-vision** system that helps reduce household food
+waste. Sensors watch the storage environment, a camera feeds a vision
+pipeline that reads product QR codes and measures banana spoilage, and a
+Flutter app shows everything live.
 
-> University microcontroller project — built around ESP32, Firebase Realtime
-> Database and a Flutter mobile app.
-
----
-
-## What it does
-
-- Reads environmental sensors (temperature, humidity, gas, weight) inside the
-  box with an **optional, independent** ESP32 DevKit board.
-- **Registers products from QR codes**: the user taps *"Scan QR from Camera"*,
-  the app captures an image from the ESP32-CAM and decodes the product QR.
-- Runs **pixel-based banana browning analysis** on ESP32-CAM images.
-- Keeps working even when the ESP32 sensor board is offline — it just shows
-  *"ESP32 not connected"* and the QR / camera / banana features still run.
-- Combines all signals into a **risk score (0-100)** and a status:
-  - `Fresh` (0-39)
-  - `Consume Soon` (40-69)
-  - `Spoilage Risk` (70-100)
-- Shows everything on a clean Flutter dashboard and raises alerts.
-
-## Box dimensions
-
-Transparent plastic box: **47 cm x 72.5 cm x 36.2 cm**.
-
-## Supported products
-
-banana, apple, tomato, cucumber, milk carton, yogurt cup, cheese package,
-egg box, packaged food. Every product carries a QR code sticker.
+> University / TÜBİTAK-style IoT project — ESP32 hardware, a Python computer
+> vision backend, Firebase Realtime Database, and a Flutter dashboard app.
 
 ---
 
-## System architecture
+## Architecture in one line
+
+Four independent layers, each doing exactly one job — no fake AI, no
+placeholder features:
 
 ```
-+---------------------+        +----------------------+
-|  ESP32 DevKit V1    |        |  ESP32-CAM AI Thinker|
-|  (optional sensor   |        |  (independent camera)|
-|   node)             |        |  - OV2640 camera     |
-|  - MQ135 gas        |        |  - CameraWebServer   |
-|  - DHT11 temp/hum   |        |  - /stream, /capture |
-|  - HX711 (optional) |        +----------+-----------+
-|  - risk score calc  |                   |
-+----------+----------+                   |  image (QR + banana)
-           |  JSON over Wi-Fi             |
-           v                              v
-   +----------------------------------------------+
-   |        Firebase Realtime Database            |
-   |  /devices/fridge_01/{sensors,camera,products,|
-   |                      bananaAnalysis,alerts}  |
-   +-----------------------+----------------------+
-                           |
-                  +--------v---------+
-                  |  Flutter app     |  QR decode + banana
-                  |  + optional      |  analysis happen here
-                  |  Python backend  |  (not on the camera)
-                  +------------------+
+ESP32 DevKit ─ sensors ─┐
+                        ├─> Firebase Realtime DB ─> Flutter app (read-only)
+Python backend ─ CV ────┘            ^
+   (QR + banana analysis)            │
+ESP32-CAM ─ MJPEG stream ────────────┘  (backend pulls frames; app shows stream)
 ```
 
-The two ESP32 boards are independent: the camera never waits for a load-cell
-event, and the app works even if the sensor board is absent.
+Full design + diagrams: **[docs/architecture.md](docs/architecture.md)**.
 
-Full details: [docs/architecture.md](docs/architecture.md).
+| Layer | What it does |
+|-------|--------------|
+| **ESP32 DevKit V1** | Reads HX711 weight, DHT11 temperature, MQ135 gas. Sends a heartbeat to Firebase every 10 s. |
+| **ESP32-CAM** | Camera only — always-on MJPEG stream + snapshot endpoint. No QR, no AI. |
+| **Python backend** | The processing engine: pulls camera frames, decodes QR codes (OpenCV + pyzbar), runs pixel-based banana browning analysis (HSV), writes results to Firebase. |
+| **Flutter app** | Read-only dashboard: live sensors, QR products, banana analysis, camera stream, alerts. |
+
+If the ESP32 sends nothing for **60 s**, the app shows **"ESP32 Offline"**.
 
 ---
 
-## Live web demo
+## Live web demo (UI only)
 
-The Flutter app is auto-deployed to **GitHub Pages** on every push to `main`
-via [`.github/workflows/deploy-web.yml`](.github/workflows/deploy-web.yml).
-Anyone can open it from a phone or laptop browser — no install needed:
+The Flutter app is auto-deployed to **GitHub Pages** on every push to `main`:
 
 **https://krcgoktug.github.io/smart-fridge-project/**
 
-The deployed build runs in **demo mode** (built-in sample data: a sample QR
-image and a sample banana image), so it works fully without any Firebase or
-hardware setup — ideal for presentations.
+> **This is a UI demo only.** GitHub Pages is served over HTTPS, and browsers
+> block the ESP32-CAM's local **HTTP** stream (mixed content). Live camera +
+> live data need **Hardware Mode**.
 
-> **Hardware mode on GitHub Pages:** the demo site is served over **HTTPS**,
-> but the ESP32-CAM is a plain **HTTP** device on the local network. Browsers
-> block "mixed content", so the live camera (QR scan / banana analysis with a
-> real device) **will not work on the GitHub Pages URL**. For Hardware mode,
-> run the app as an installed mobile app, or serve it locally over `http://`.
-> Demo mode works everywhere.
+### Hardware Mode — Android app or local run
 
-> GitHub Pages source is set to **GitHub Actions**, so every push to `main`
-> redeploys automatically. The workflow can also be run manually from the
-> **Actions** tab ("Deploy web app to GitHub Pages" -> "Run workflow").
+For the real camera stream and live data, run the app where it can reach the
+local network:
+
+- **Android app** — the repo builds a release APK via
+  [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml).
+  Download it from the **Actions** tab → "Build Android APK" → latest run →
+  Artifacts → `smart-fridge-app-release-apk`.
+- **Local run** — `flutter run` on a device/emulator on the same Wi-Fi.
+
+---
 
 ## Repository structure
 
 ```
 smart-fridge-project/
   README.md
-  docs/                     Architecture, wiring, schema, demo, report
+  docs/                       Architecture (+ diagrams), wiring, schema, demo
   firmware/
-    esp32-devkit-sensors/   Arduino sketch for sensors + Firebase upload
-    esp32-cam-camera/       Arduino sketch for the camera web server
-  mobile/
-    smart_fridge_app/       Flutter mobile application
+    esp32-devkit-sensors/     ESP32 DevKit — sensor controller sketch
+    esp32-cam-camera/         ESP32-CAM — camera-only sketch
   backend/
-    optional-image-analysis-service/   Python banana browning analysis
-  qr-samples/               Sample product QR JSON + generation guide
+    processing-engine/        Python QR + banana CV processing engine
+  mobile/
+    smart_fridge_app/         Flutter dashboard app (read-only viewer)
+  qr-samples/                 Sample product QR payloads + generation guide
+  .github/workflows/          Web deploy + Android APK build
 ```
 
 ---
 
-## Quick start
+## Setup
 
 ### 1. Firebase
 
-1. Create a Firebase project at <https://console.firebase.google.com>.
+1. Create a project at <https://console.firebase.google.com>.
 2. Enable **Realtime Database** (not Firestore).
-3. Import the schema layout from [docs/firebase-schema.json](docs/firebase-schema.json).
-4. For development, set the rules to test mode; for the demo, restrict them.
+3. The structure is in [docs/firebase-schema.json](docs/firebase-schema.json) —
+   the ESP32 and backend create the nodes automatically once configured.
 
-### 2. Firmware (ESP32)
+### 2. Firmware
 
-- See [firmware/esp32-devkit-sensors/README.md](firmware/esp32-devkit-sensors/README.md)
-  for the sensors board.
-- See [firmware/esp32-cam-camera/README.md](firmware/esp32-cam-camera/README.md)
-  for the camera board.
-- Wiring table: [docs/wiring.md](docs/wiring.md).
+- ESP32 DevKit (sensors): [firmware/esp32-devkit-sensors/README.md](firmware/esp32-devkit-sensors/README.md)
+- ESP32-CAM (camera): [firmware/esp32-cam-camera/README.md](firmware/esp32-cam-camera/README.md)
+- Wiring: [docs/wiring.md](docs/wiring.md)
 
-### 3. Mobile app (Flutter)
+### 3. Backend (processing engine)
+
+```bash
+cd backend/processing-engine
+python -m venv .venv
+.venv/Scripts/activate              # Windows
+pip install -r requirements.txt
+cp .env.example .env                # set CAMERA_BASE_URL + Firebase
+python app.py                       # continuous QR + banana processing
+```
+
+Details: [backend/processing-engine/README.md](backend/processing-engine/README.md).
+
+### 4. Flutter app
 
 ```bash
 cd mobile/smart_fridge_app
 flutter pub get
-# generate Firebase config (creates lib/firebase_options.dart):
-flutterfire configure
-flutter run
+flutterfire configure               # generates lib/firebase_options.dart
+flutter run                         # or: flutter build apk
 ```
 
 Details: [mobile/smart_fridge_app/README.md](mobile/smart_fridge_app/README.md).
 
-### 4. Optional image analysis backend
-
-```bash
-cd backend/optional-image-analysis-service
-python -m venv .venv
-.venv/Scripts/activate        # Windows
-pip install -r requirements.txt
-python app.py
-```
-
 ---
 
-## Risk score model
+## QR codes
 
-The system estimates **relative** spoilage risk, not exact spoilage:
+Each product carries our own printed QR code with a tiny JSON payload:
 
+```json
+{ "product": "Milk", "expiry": "2026-05-25" }
 ```
-riskScore = expiryRisk + temperatureRisk + humidityRisk
-          + gasRisk + visualRisk + weightRisk     (capped at 100)
-```
 
-Different product categories use different components — see
-[docs/architecture.md](docs/architecture.md#risk-score-logic).
+The backend decodes it from the camera frame and registers the product. See
+[qr-samples/](qr-samples/).
 
 ---
 
 ## Security
 
-- **No real secrets are committed.** Wi-Fi/Firebase credentials use template
-  files (`*.example`) and are listed in `.gitignore`.
-- Copy `firmware/esp32-devkit-sensors/secrets.example.h` to `secrets.h` and fill
-  in your own values.
-- Copy `mobile/smart_fridge_app/lib/firebase_options.dart.example` (or run
-  `flutterfire configure`) to provide your own Firebase config.
+- **No real secrets are committed.** Credentials use `*.example` templates and
+  `.gitignore` (`secrets.h`, `cam_secrets.h`, `.env`).
+- `lib/firebase_options.dart` ships with placeholder values so the app
+  compiles; replace it with `flutterfire configure`.
 
 ---
 

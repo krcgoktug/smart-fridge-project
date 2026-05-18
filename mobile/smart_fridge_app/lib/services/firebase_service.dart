@@ -1,49 +1,37 @@
 import 'package:firebase_database/firebase_database.dart';
 
 import '../app_config.dart';
-import '../models/alert.dart';
 import '../models/banana_analysis.dart';
-import '../models/camera_info.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
-import 'demo_data.dart';
 
-/// Data access layer for the app.
+/// Read-only data access layer.
 ///
-/// When [ready] is true it talks to Firebase Realtime Database. When it is
-/// false (placeholder config / no Firebase project) it transparently falls
-/// back to [DemoRepository], so every screen is fully usable with realistic
-/// sample data. Callers do not need to know which mode is active.
+/// The Flutter app is a pure visualization layer: it only **reads** from
+/// Firebase Realtime Database. The ESP32 boards and the Python backend are
+/// the only writers.
+///
+/// When [ready] is false (Firebase not configured for a real project), the
+/// streams emit empty data so the UI shows honest "offline / no data" states
+/// instead of crashing.
 class FirebaseService {
-  /// True once Firebase initialised against a real project.
+  /// True once Firebase is initialised against a real project.
   static bool ready = false;
-
-  /// True when the app is running on built-in demo data.
-  static bool get demoMode => !ready;
-
-  static DemoRepository get _demo => DemoRepository.instance;
 
   static DatabaseReference get _root =>
       FirebaseDatabase.instance.ref(AppConfig.deviceRoot);
 
-  // --- Streams ---------------------------------------------------------------
-
+  /// Live ESP32 sensor heartbeat.
   static Stream<SensorData> sensorStream() {
-    if (demoMode) return _demo.sensorStream();
+    if (!ready) return Stream<SensorData>.value(SensorData());
     return _root.child('sensors').onValue.map(
           (DatabaseEvent e) => SensorData.fromMap(_asMap(e.snapshot.value)),
         );
   }
 
-  static Stream<CameraInfo> cameraStream() {
-    if (demoMode) return _demo.cameraStream();
-    return _root.child('camera').onValue.map(
-          (DatabaseEvent e) => CameraInfo.fromMap(_asMap(e.snapshot.value)),
-        );
-  }
-
+  /// Live list of QR-detected products.
   static Stream<List<Product>> productsStream() {
-    if (demoMode) return _demo.productsStream();
+    if (!ready) return Stream<List<Product>>.value(<Product>[]);
     return _root.child('products').onValue.map((DatabaseEvent e) {
       final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
       if (map == null) return <Product>[];
@@ -52,118 +40,20 @@ class FirebaseService {
         final Map<dynamic, dynamic>? pm = _asMap(value);
         if (pm != null) list.add(Product.fromMap(key.toString(), pm));
       });
+      list.sort((Product a, Product b) =>
+          b.detectedAt.compareTo(a.detectedAt));
       return list;
     });
   }
 
-  /// Live banana browning analysis results, keyed by productId.
-  static Stream<List<BananaAnalysis>> bananaAnalysisStream() {
-    if (demoMode) return _demo.bananaAnalysisStream();
-    return _root.child('bananaAnalysis').onValue.map((DatabaseEvent e) {
-      final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
-      if (map == null) return <BananaAnalysis>[];
-      final List<BananaAnalysis> list = <BananaAnalysis>[];
-      map.forEach((dynamic key, dynamic value) {
-        final Map<dynamic, dynamic>? bm = _asMap(value);
-        if (bm != null) {
-          list.add(BananaAnalysis.fromMap(key.toString(), bm));
-        }
-      });
-      return list;
-    });
+  /// Live banana browning analysis result.
+  static Stream<BananaAnalysis> bananaAnalysisStream() {
+    if (!ready) return Stream<BananaAnalysis>.value(BananaAnalysis());
+    return _root.child('bananaAnalysis').onValue.map(
+          (DatabaseEvent e) =>
+              BananaAnalysis.fromMap(_asMap(e.snapshot.value)),
+        );
   }
-
-  static Stream<List<Alert>> alertsStream() {
-    if (demoMode) return _demo.alertsStream();
-    return _root.child('alerts').onValue.map((DatabaseEvent e) {
-      final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
-      if (map == null) return <Alert>[];
-      final List<Alert> list = <Alert>[];
-      map.forEach((dynamic key, dynamic value) {
-        final Map<dynamic, dynamic>? am = _asMap(value);
-        if (am != null) list.add(Alert.fromMap(key.toString(), am));
-      });
-      list.sort((Alert a, Alert b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
-  }
-
-  // --- Writes ----------------------------------------------------------------
-
-  static Future<void> saveProduct(Product product) async {
-    product.remainingHours ??= product.hoursUntilExpiry();
-    if (demoMode) {
-      _demo.saveProduct(product);
-      return;
-    }
-    await _root.child('products/${product.productId}').set(product.toMap());
-  }
-
-  static Future<void> updateProductRisk(Product product) async {
-    if (demoMode) {
-      _demo.saveProduct(product);
-      return;
-    }
-    await _root.child('products/${product.productId}').update(<String, dynamic>{
-      'riskScore': product.riskScore,
-      'status': product.status,
-      'remainingHours': product.remainingHours,
-      'currentWeight': product.currentWeight,
-      'browningRatio': product.browningRatio,
-      'visualStatus': product.visualStatus,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    });
-  }
-
-  static Future<void> deleteProduct(String productId) async {
-    if (demoMode) {
-      _demo.deleteProduct(productId);
-      return;
-    }
-    await _root.child('products/$productId').remove();
-  }
-
-  static Future<void> addAlert(String message, String severity,
-      {String? productId}) async {
-    if (demoMode) {
-      _demo.addAlert(message, severity, productId: productId);
-      return;
-    }
-    final DatabaseReference ref = _root.child('alerts').push();
-    await ref.set(<String, dynamic>{
-      'message': message,
-      'severity': severity,
-      'productId': productId,
-      'createdAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    });
-  }
-
-  static Future<void> deleteAlert(String alertId) async {
-    if (demoMode) {
-      _demo.deleteAlert(alertId);
-      return;
-    }
-    await _root.child('alerts/$alertId').remove();
-  }
-
-  /// Save a banana browning analysis result. Also mirrors the browning
-  /// figure onto the product so the risk score stays consistent.
-  static Future<void> saveBananaAnalysis(BananaAnalysis analysis) async {
-    if (demoMode) {
-      _demo.saveBananaAnalysis(analysis);
-      return;
-    }
-    await _root
-        .child('bananaAnalysis/${analysis.productId}')
-        .set(analysis.toMap());
-    await _root.child('products/${analysis.productId}').update(<String, dynamic>{
-      'browningRatio': analysis.totalBrowningPercentage / 100.0,
-      'visualStatus': analysis.visualStatus,
-      'updatedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    });
-  }
-
-  // --- Helpers ---------------------------------------------------------------
 
   static Map<dynamic, dynamic>? _asMap(Object? value) {
     if (value is Map) return value;

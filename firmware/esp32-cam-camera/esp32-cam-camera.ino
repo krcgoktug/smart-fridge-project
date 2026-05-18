@@ -3,46 +3,40 @@
  *  Zero Waste Smart Fridge  --  ESP32-CAM AI-Thinker  --  Camera Node
  * ==========================================================================
  *
- *  PURPOSE: serve images of the box interior. NOTHING ELSE.
- *  This board does NOT decode QR codes and does NOT run image analysis --
- *  it only exposes a camera web server. Decoding/analysis happens in the
- *  mobile app or the optional Python backend.
+ *  CAMERA ONLY. This board:
+ *    - runs an always-on MJPEG stream,
+ *    - exposes a single-frame snapshot endpoint,
+ *    - does NOT decode QR codes,
+ *    - does NOT run any AI / image processing,
+ *    - does NOT talk to Firebase.
  *
- *  ENDPOINTS (once running, at the IP printed on the serial monitor):
- *    GET /          -> simple HTML page with a live MJPEG stream
- *    GET /stream    -> raw multipart MJPEG stream
+ *  All QR decoding and banana analysis is done by the Python backend, which
+ *  pulls frames from these endpoints.
+ *
+ *  ENDPOINTS (at the IP printed on the serial monitor):
+ *    GET /          -> HTML page with the live stream
+ *    GET /stream    -> continuous multipart MJPEG stream
  *    GET /capture   -> a single JPEG frame
- *
- *  It also (optionally) writes its own streamUrl/captureUrl to Firebase:
- *      /devices/<DEVICE_ID>/camera
  *
  *  ------------------------------------------------------------------------
  *  BOARD: "AI Thinker ESP32-CAM"   (Tools -> Board)
  *  PSRAM: enabled (default for this board)
- *  No external libraries needed beyond the esp32 board package + ArduinoJson.
- *    - "ArduinoJson" by Benoit Blanchon (only used for the optional upload)
+ *  No external libraries are required beyond the esp32 board package.
  *
- *  FLASHING: ESP32-CAM has no USB. Use an FTDI/USB-TTL adapter at 3.3V,
+ *  FLASHING: the ESP32-CAM has no USB. Use an FTDI/USB-TTL adapter at 3.3V,
  *  jumper GPIO0 -> GND to enter flash mode, then remove it and reset.
  *  See docs/wiring.md.
  *
- *  CONFIG: copy cam_secrets.example.h -> cam_secrets.h and fill it in.
+ *  CONFIG: copy cam_secrets.example.h -> cam_secrets.h and fill in Wi-Fi.
  * ==========================================================================
  */
 
 #include <WiFi.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
-#include <ArduinoJson.h>
-#include <time.h>
 #include "esp_camera.h"
 #include "esp_http_server.h"
 
 #include "camera_pins.h"
 #include "cam_secrets.h"   // copy from cam_secrets.example.h (git-ignored)
-
-// Set to false if you do not want the board to touch Firebase at all.
-#define WRITE_URLS_TO_FIREBASE  true
 
 static httpd_handle_t camera_httpd = NULL;
 
@@ -79,13 +73,12 @@ bool initCamera() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
 
-  // PSRAM present on the AI-Thinker board -> use a larger frame + 2 buffers.
   if (psramFound()) {
-    config.frame_size   = FRAMESIZE_VGA;   // 640x480, good for browning CV
-    config.jpeg_quality = 12;              // lower number = better quality
+    config.frame_size   = FRAMESIZE_VGA;   // 640x480, good for QR + CV
+    config.jpeg_quality = 12;
     config.fb_count     = 2;
   } else {
-    config.frame_size   = FRAMESIZE_CIF;   // 400x296 fallback
+    config.frame_size   = FRAMESIZE_CIF;
     config.jpeg_quality = 15;
     config.fb_count     = 1;
   }
@@ -102,8 +95,6 @@ bool initCamera() {
 // ==========================================================================
 //  HTTP handlers
 // ==========================================================================
-
-// GET /capture  -> a single JPEG frame.
 static esp_err_t captureHandler(httpd_req_t* req) {
   camera_fb_t* fb = esp_camera_fb_get();
   if (!fb) {
@@ -119,7 +110,6 @@ static esp_err_t captureHandler(httpd_req_t* req) {
   return res;
 }
 
-// GET /stream  -> continuous MJPEG.
 static esp_err_t streamHandler(httpd_req_t* req) {
   esp_err_t res = httpd_resp_set_type(req, STREAM_CONTENT_TYPE);
   if (res != ESP_OK) return res;
@@ -143,7 +133,6 @@ static esp_err_t streamHandler(httpd_req_t* req) {
   return res;
 }
 
-// GET /  -> minimal HTML page embedding the stream.
 static esp_err_t indexHandler(httpd_req_t* req) {
   static const char page[] =
     "<!DOCTYPE html><html><head><title>Smart Fridge Camera</title>"
@@ -151,7 +140,7 @@ static esp_err_t indexHandler(httpd_req_t* req) {
     "<style>body{font-family:sans-serif;text-align:center;background:#111;"
     "color:#eee;margin:0;padding:16px}img{max-width:100%;border-radius:8px}"
     "</style></head><body><h2>Zero Waste Smart Fridge</h2>"
-    "<p>Live box camera</p><img src='/stream'>"
+    "<p>Live camera</p><img src='/stream'>"
     "<p><a style='color:#4caf50' href='/capture'>/capture</a> "
     "for a single frame</p></body></html>";
   httpd_resp_set_type(req, "text/html");
@@ -199,53 +188,6 @@ void connectWiFi() {
   }
 }
 
-// Real Unix time from NTP; falls back to uptime seconds before first sync.
-unsigned long nowEpoch() {
-  time_t t = time(nullptr);
-  if (t < 100000) return millis() / 1000;
-  return (unsigned long)t;
-}
-
-// ==========================================================================
-//  Optional: publish the camera URLs to Firebase
-// ==========================================================================
-void publishCameraUrls() {
-  if (!WRITE_URLS_TO_FIREBASE) return;
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  String ip = WiFi.localIP().toString();
-  String streamUrl  = "http://" + ip;
-  String captureUrl = "http://" + ip + "/capture";
-
-  StaticJsonDocument<192> doc;
-  doc["streamUrl"]  = streamUrl;
-  doc["captureUrl"] = captureUrl;
-  doc["updatedAt"]  = nowEpoch();
-
-  String body;
-  serializeJson(doc, body);
-
-  String url = String(FIREBASE_HOST) + "/devices/" + DEVICE_ID +
-               "/camera.json?auth=" + FIREBASE_AUTH;
-
-  WiFiClientSecure client;
-  client.setInsecure();
-
-  HTTPClient http;
-  if (!http.begin(client, url)) {
-    Serial.println("[Firebase] http.begin failed.");
-    return;
-  }
-  http.addHeader("Content-Type", "application/json");
-  int code = http.sendRequest("PATCH", (uint8_t*)body.c_str(), body.length());
-  if (code == HTTP_CODE_OK) {
-    Serial.println("[Firebase] camera URLs published.");
-  } else {
-    Serial.printf("[Firebase] PATCH failed: %d\n", code);
-  }
-  http.end();
-}
-
 // ==========================================================================
 //  Setup / loop
 // ==========================================================================
@@ -261,29 +203,23 @@ void setup() {
   }
 
   connectWiFi();
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");  // real timestamps
   startCameraServer();
-  publishCameraUrls();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("[Ready] open  http://");
+    Serial.print("[Ready] stream  : http://");
     Serial.println(WiFi.localIP());
-    Serial.print("[Ready] capture http://");
+    Serial.print("[Ready] capture : http://");
     Serial.print(WiFi.localIP());
     Serial.println("/capture");
+    Serial.println("[Ready] Put this IP into the backend .env and the app.");
   }
 }
 
 void loop() {
-  // Reconnect Wi-Fi if it drops, and re-publish the URLs (IP may change).
-  static unsigned long lastCheck = 0;
-  if (millis() - lastCheck > 30000UL) {
-    lastCheck = millis();
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("[WiFi] lost -- reconnecting.");
-      connectWiFi();
-      publishCameraUrls();
-    }
+  // Reconnect Wi-Fi if it drops.
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[WiFi] lost -- reconnecting.");
+    connectWiFi();
   }
-  delay(200);
+  delay(2000);
 }

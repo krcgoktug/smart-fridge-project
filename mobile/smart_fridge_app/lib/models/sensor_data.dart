@@ -1,25 +1,29 @@
-/// Latest environmental readings written by the ESP32 DevKit sensor node
-/// to `/devices/<id>/sensors`.
+/// Latest sensor heartbeat from the ESP32 DevKit, read from
+/// `devices/<id>/sensors`.
 class SensorData {
   SensorData({
-    this.temperature = 0,
-    this.humidity = 0,
-    this.gasValue = 0,
     this.weight = 0,
-    this.riskScore = 0,
-    this.status = 'Fresh',
+    this.temperature = 0,
+    this.gas = 0,
     this.updatedAt = 0,
+    this.alive = false,
   });
 
+  final num weight; // grams
   final num temperature; // Celsius
-  final num humidity; // percent
-  final num gasValue; // MQ135 raw ADC
-  final num weight; // grams (total box weight)
-  final num riskScore; // sensor-only risk estimate from firmware
-  final String status;
-  final num updatedAt; // seconds
+  final num gas; // MQ135 raw ADC
+  final num updatedAt; // Unix seconds (NTP)
+  final bool alive;
 
-  bool get isEmpty => updatedAt == 0;
+  /// True when a heartbeat exists at all.
+  bool get hasData => updatedAt > 0;
+
+  /// The ESP32 is online when the heartbeat is fresh (< 60 s old).
+  bool get isOnline {
+    if (!hasData || !alive) return false;
+    final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return (now - updatedAt) <= 60;
+  }
 
   factory SensorData.fromMap(Map<dynamic, dynamic>? map) {
     if (map == null) return SensorData();
@@ -30,13 +34,11 @@ class SensorData {
     }
 
     return SensorData(
-      temperature: n(map['temperature']),
-      humidity: n(map['humidity']),
-      gasValue: n(map['gasValue']),
       weight: n(map['weight']),
-      riskScore: n(map['riskScore']),
-      status: (map['status'] ?? 'Fresh').toString(),
+      temperature: n(map['temperature']),
+      gas: n(map['gas']),
       updatedAt: n(map['updatedAt']),
+      alive: map['alive'] == true,
     );
   }
 }

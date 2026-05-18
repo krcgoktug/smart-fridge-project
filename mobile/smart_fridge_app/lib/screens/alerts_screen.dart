@@ -1,94 +1,118 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../models/alert.dart';
+import '../models/banana_analysis.dart';
+import '../models/product.dart';
+import '../models/sensor_data.dart';
+import '../services/alert_service.dart';
 import '../services/firebase_service.dart';
 import '../utils/status_colors.dart';
 
-/// Screen 6 - Alerts.
-class AlertsScreen extends StatelessWidget {
+/// Screen 4 - Alerts. Alerts are derived on the device from the live data.
+class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
+
+  @override
+  State<AlertsScreen> createState() => _AlertsScreenState();
+}
+
+class _AlertsScreenState extends State<AlertsScreen> {
+  Timer? _refresh;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Alerts')),
-      body: const _AlertsBody(),
+      body: StreamBuilder<SensorData>(
+        stream: FirebaseService.sensorStream(),
+        builder: (BuildContext context, AsyncSnapshot<SensorData> sSnap) {
+          final SensorData sensors = sSnap.data ?? SensorData();
+          return StreamBuilder<List<Product>>(
+            stream: FirebaseService.productsStream(),
+            builder: (BuildContext context,
+                AsyncSnapshot<List<Product>> pSnap) {
+              final List<Product> products = pSnap.data ?? <Product>[];
+              return StreamBuilder<BananaAnalysis>(
+                stream: FirebaseService.bananaAnalysisStream(),
+                builder: (BuildContext context,
+                    AsyncSnapshot<BananaAnalysis> bSnap) {
+                  final List<Alert> alerts = AlertService.derive(
+                    sensors: sensors,
+                    products: products,
+                    banana: bSnap.data ?? BananaAnalysis(),
+                  );
+                  if (alerts.isEmpty) {
+                    return const _NoAlerts();
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(14),
+                    itemCount: alerts.length,
+                    itemBuilder: (BuildContext context, int i) {
+                      final Alert a = alerts[i];
+                      final Color color =
+                          StatusColors.forSeverity(a.severity);
+                      return Card(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: color.withValues(alpha: 0.15),
+                            child: Icon(
+                                StatusColors.iconForSeverity(a.severity),
+                                color: color),
+                          ),
+                          title: Text(a.message),
+                          subtitle: Text(a.severity.toUpperCase(),
+                              style: const TextStyle(fontSize: 11)),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
 
-class _AlertsBody extends StatelessWidget {
-  const _AlertsBody();
+class _NoAlerts extends StatelessWidget {
+  const _NoAlerts();
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Alert>>(
-      stream: FirebaseService.alertsStream(),
-      builder: (BuildContext context, AsyncSnapshot<List<Alert>> snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final List<Alert> alerts = snap.data ?? <Alert>[];
-        if (alerts.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(Icons.notifications_off_outlined,
-                    size: 60, color: Colors.black26),
-                SizedBox(height: 12),
-                Text('No alerts',
-                    style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 6),
-                Text('Alerts appear here when products need attention.',
-                    style: TextStyle(color: Colors.black54)),
-              ],
-            ),
-          );
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(14),
-          itemCount: alerts.length,
-          itemBuilder: (BuildContext context, int i) {
-            final Alert a = alerts[i];
-            final Color color = StatusColors.forSeverity(a.severity);
-            return Dismissible(
-              key: ValueKey<String>(a.id),
-              direction: DismissDirection.endToStart,
-              background: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                decoration: BoxDecoration(
-                  color: StatusColors.spoilage,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.delete, color: Colors.white),
-              ),
-              onDismissed: (_) => FirebaseService.deleteAlert(a.id),
-              child: Card(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: color.withValues(alpha: 0.15),
-                    child: Icon(
-                        StatusColors.iconForSeverity(a.severity),
-                        color: color),
-                  ),
-                  title: Text(a.message),
-                  subtitle: Text(
-                    '${a.severity.toUpperCase()}  -  '
-                    '${DateFormat('dd MMM, HH:mm').format(a.createdDateTime)}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(Icons.notifications_off_outlined,
+              size: 60, color: Colors.black26),
+          SizedBox(height: 12),
+          Text('No alerts',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 6),
+          Text('No expiring products or sensor issues right now.',
+              style: TextStyle(color: Colors.black54)),
+        ],
+      ),
     );
   }
 }
