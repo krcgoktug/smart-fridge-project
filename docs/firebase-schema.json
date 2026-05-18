@@ -21,6 +21,14 @@
         "captureUrl": "http://172.19.15.112/capture",
         "updatedAt": 1710000000
       },
+      "detection": {
+        "_comment": "Written by the ESP32 DevKit when the load-cell weight changes. The app/backend watches newProductDetected and resets it to false after registering the product.",
+        "newProductDetected": false,
+        "eventType": "added",
+        "weightDelta": 152,
+        "stableWeight": 1436,
+        "updatedAt": 1710000000
+      },
       "products": {
         "banana_001": {
           "productId": "banana_001",

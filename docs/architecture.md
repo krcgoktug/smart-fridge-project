@@ -68,7 +68,8 @@ libraries for RTDB are mature and lightweight.
 ```
 /devices/fridge_01/sensors     <- written by ESP32 DevKit
 /devices/fridge_01/camera      <- written by ESP32-CAM (or app)
-/devices/fridge_01/products    <- written by mobile app (QR scan) + backend
+/devices/fridge_01/detection   <- written by ESP32 DevKit (weight trigger)
+/devices/fridge_01/products    <- written by app/backend (auto registration)
 /devices/fridge_01/alerts      <- written by app / backend
 ```
 
@@ -81,31 +82,58 @@ The full schema with example values lives in
 |------|--------|--------|
 | `sensors` | ESP32 DevKit | App, backend |
 | `camera` | ESP32-CAM / app | App, backend |
-| `products` | App (QR scan), backend (visual fields) | App |
+| `detection` | ESP32 DevKit (sets), app/backend (resets) | App, backend |
+| `products` | App / backend (auto registration) | App |
 | `alerts` | App, backend | App |
 
 ---
 
-## 4. Data flow
+## 4. Automatic product registration
+
+Product registration is **automatic** and triggered by the load cells — the
+user does **not** have to press an "Add Product" button. (A manual QR scan
+remains available only as a backup.)
+
+### Workflow
 
 ```
-1. User scans a product QR code with the phone.
-   -> App parses JSON -> writes /products/<id>.
-
-2. ESP32 DevKit reads sensors every N seconds.
-   -> Computes sensor-side risk -> writes /sensors.
-
-3. ESP32-CAM serves the live image at /capture.
-   -> streamUrl/captureUrl stored in /camera.
-
-4. (Optional) Python backend fetches the capture image,
-   computes browningRatio + visualStatus for banana products,
-   writes those fields back into /products/<id>.
-
-5. App reads /sensors + /products, computes the final
-   per-product and global risk score, shows dashboard,
-   and writes /alerts when thresholds are crossed.
+1. User places a product on the load-cell platform.
+2. ESP32 DevKit detects a stable weight INCREASE (see below).
+3. ESP32 DevKit writes /detection:
+       { newProductDetected: true, eventType: "added",
+         weightDelta, stableWeight, updatedAt }
+4. The app (or backend) is listening on /detection.
+5. When newProductDetected == true it calls the ESP32-CAM /capture URL.
+6. The captured image is analyzed for a QR code (on the app / backend).
+7. The QR-code JSON is parsed into product metadata.
+8. The product is saved under /devices/fridge_01/products/{productId}.
+9. The app shows the new product automatically (it already streams /products).
+10. The app/backend resets /detection/newProductDetected back to false.
 ```
+
+The **ESP32-CAM only serves the image** via `/capture`. It never decodes QR
+codes — decoding happens on the app or the Python backend.
+
+### Weight-change detection
+
+The ESP32 DevKit samples the HX711 weight roughly once per second and runs a
+small stability state machine:
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| `WEIGHT_EVENT_THRESHOLD` | 50 g | minimum change treated as an event |
+| `WEIGHT_NOISE_BAND` | 20 g | smaller fluctuations are ignored |
+| `WEIGHT_STABLE_MS` | 4000 ms | weight must hold steady this long |
+
+- The weight must settle (stay within the noise band) for `WEIGHT_STABLE_MS`
+  before a change is accepted — this rejects hands, vibration and noise.
+- A stable **increase** of >= 50 g => product **added** =>
+  `newProductDetected: true`, `eventType: "added"`.
+- A stable **decrease** of >= 50 g => product **removed / consumed** =>
+  `eventType: "removed"` (`newProductDetected` stays `false`; no camera
+  capture is needed for a removal).
+- After firing, the new stable level becomes the baseline, so the event does
+  not repeat until the weight settles at yet another level.
 
 ---
 
