@@ -5,6 +5,7 @@
       "sensors": {
         "weight": 1284,
         "temperature": 5.8,
+        "humidity": 47,
         "gas": 1350,
         "updatedAt": 1747560000,
         "alive": true

@@ -58,7 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: <Widget>[
                       _Esp32Card(sensors: sensors),
                       const SizedBox(height: 14),
-                      const _SectionTitle('Environment'),
+                      const _SectionTitle('Sensors'),
                       if (sensors.isOnline)
                         _SensorGrid(sensors: sensors)
                       else
@@ -166,8 +166,8 @@ class _OfflineNotice extends StatelessWidget {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'ESP32 Offline — temperature, weight and gas readings are '
-                'not available right now.',
+                'ESP32 Offline — temperature, humidity, gas and weight '
+                'readings are not available right now.',
                 style: TextStyle(fontSize: 13, height: 1.4),
               ),
             ),
@@ -193,13 +193,6 @@ class _SensorGrid extends StatelessWidget {
       childAspectRatio: 1.6,
       children: <Widget>[
         SensorCard(
-          icon: Icons.scale,
-          label: 'Weight',
-          value: sensors.weight.toStringAsFixed(0),
-          unit: 'g',
-          color: const Color(0xFF5D4037),
-        ),
-        SensorCard(
           icon: Icons.thermostat,
           label: 'Temperature',
           value: sensors.temperature.toStringAsFixed(1),
@@ -207,11 +200,25 @@ class _SensorGrid extends StatelessWidget {
           color: const Color(0xFF1976D2),
         ),
         SensorCard(
+          icon: Icons.water_drop,
+          label: 'Humidity',
+          value: sensors.humidity.toStringAsFixed(0),
+          unit: '%',
+          color: const Color(0xFF0097A7),
+        ),
+        SensorCard(
           icon: Icons.air,
           label: 'Gas (MQ135)',
           value: sensors.gas.toStringAsFixed(0),
           unit: 'adc',
           color: const Color(0xFF7B1FA2),
+        ),
+        SensorCard(
+          icon: Icons.scale,
+          label: 'Weight',
+          value: sensors.weight.toStringAsFixed(0),
+          unit: 'g',
+          color: const Color(0xFF5D4037),
         ),
       ],
     );

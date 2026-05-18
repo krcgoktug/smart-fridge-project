@@ -4,6 +4,7 @@ class SensorData {
   SensorData({
     this.weight = 0,
     this.temperature = 0,
+    this.humidity = 0,
     this.gas = 0,
     this.updatedAt = 0,
     this.alive = false,
@@ -11,6 +12,7 @@ class SensorData {
 
   final num weight; // grams
   final num temperature; // Celsius
+  final num humidity; // percent (DHT11)
   final num gas; // MQ135 raw ADC
   final num updatedAt; // Unix seconds (NTP)
   final bool alive;
@@ -36,6 +38,7 @@ class SensorData {
     return SensorData(
       weight: n(map['weight']),
       temperature: n(map['temperature']),
+      humidity: n(map['humidity']),
       gas: n(map['gas']),
       updatedAt: n(map['updatedAt']),
       alive: map['alive'] == true,

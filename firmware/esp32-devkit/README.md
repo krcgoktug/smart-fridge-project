@@ -13,6 +13,7 @@ Path: `devices/fridge_01/sensors`
 {
   "weight": 482,
   "temperature": 5.8,
+  "humidity": 47,
   "gas": 1350,
   "updatedAt": 1710000000,
   "alive": true
@@ -69,7 +70,7 @@ Expected output:
 === Zero Waste Smart Fridge -- ESP32 Sensor Controller ===
 [HX711] connected and tared.
 [WiFi] Connected. IP: 192.168.1.42
-[Read] W=482g  T=5.8C  Gas=1350
+[Read] W=482g  T=5.8C  H=47%  Gas=1350
 [Heartbeat] sent -> devices/fridge_01/sensors
 ```
 

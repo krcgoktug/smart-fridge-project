@@ -13,6 +13,7 @@
  *      {
  *        "weight":      <grams>,
  *        "temperature": <Celsius>,
+ *        "humidity":    <percent>,
  *        "gas":         <MQ135 raw ADC>,
  *        "updatedAt":   <Unix seconds, NTP>,
  *        "alive":       true
@@ -22,9 +23,9 @@
  *  than 60 seconds.
  *
  *  Sensors:
- *    - HX711 + load cell  : weight        (DT GPIO 16, SCK GPIO 17)
- *    - DHT11              : temperature   (GPIO 4)
- *    - MQ135              : gas / air     (GPIO 34, analog)
+ *    - HX711 + load cell  : weight                 (DT GPIO 16, SCK GPIO 17)
+ *    - DHT11              : temperature + humidity  (GPIO 4)
+ *    - MQ135              : gas / air               (GPIO 34, analog)
  *
  *  ------------------------------------------------------------------------
  *  REQUIRED LIBRARIES (Arduino Library Manager):
@@ -112,6 +113,15 @@ float readTemperature() {
   return t;
 }
 
+float readHumidity() {
+  float h = dht.readHumidity();             // percent
+  if (isnan(h)) {
+    Serial.println("[DHT11] humidity read failed.");
+    return 0;
+  }
+  return h;
+}
+
 int readGas() {
   long sum = 0;
   for (int i = 0; i < 16; i++) {
@@ -130,15 +140,16 @@ float readWeight() {
 // ==========================================================================
 //  Heartbeat -> Firebase Realtime Database (REST PATCH)
 // ==========================================================================
-bool sendHeartbeat(float weight, float temperature, int gas) {
+bool sendHeartbeat(float weight, float temperature, float humidity, int gas) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[Firebase] No Wi-Fi, skipping heartbeat.");
     return false;
   }
 
-  StaticJsonDocument<192> doc;
+  StaticJsonDocument<256> doc;
   doc["weight"]      = (int)weight;
   doc["temperature"] = temperature;
+  doc["humidity"]    = humidity;
   doc["gas"]         = gas;
   doc["updatedAt"]   = nowEpoch();
   doc["alive"]       = true;
@@ -214,10 +225,12 @@ void loop() {
 
     float weight = readWeight();
     float temp   = readTemperature();
+    float hum    = readHumidity();
     int   gas    = readGas();
 
-    Serial.printf("[Read] W=%.0fg  T=%.1fC  Gas=%d\n", weight, temp, gas);
-    sendHeartbeat(weight, temp, gas);
+    Serial.printf("[Read] W=%.0fg  T=%.1fC  H=%.0f%%  Gas=%d\n",
+                  weight, temp, hum, gas);
+    sendHeartbeat(weight, temp, hum, gas);
   }
 
   delay(50);

@@ -24,7 +24,7 @@ and an easy-to-read dashboard that warns the user early.
 The system has four layers:
 
 1. **Sensing layer — ESP32 DevKit V1.** Reads HX711 load cells (weight), a
-   DHT11 sensor (temperature) and an MQ135 sensor (gas). Every 10 seconds it
+   DHT11 sensor (temperature and humidity) and an MQ135 sensor (gas). Every 10 seconds it
    sends a heartbeat to the cloud database with an NTP timestamp, so the
    application can reliably detect when the board goes offline (no update for
    60 seconds). The load cells provide quantity / weight verification and a

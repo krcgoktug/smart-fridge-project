@@ -46,11 +46,15 @@ when `updatedAt` is older than 60 s.
 {
   "weight": 482,
   "temperature": 5.8,
+  "humidity": 47,
   "gas": 1350,
   "updatedAt": 1710000000,
   "alive": true
 }
 ```
+
+`temperature` (°C) and `humidity` (%) come from the DHT11; `gas` is the raw
+MQ135 reading; `weight` (g) is the HX711 load cells.
 
 ### `camera`
 

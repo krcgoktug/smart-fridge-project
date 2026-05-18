@@ -23,7 +23,7 @@ capability it does not have.
         │   (sensor node)      │         │  (camera node)        │
         │                      │         │                      │
         │  HX711  -> weight    │         │  OV2640 camera        │
-        │  DHT11  -> temp      │         │  HTTP server:         │
+        │  DHT11  -> temp+hum  │         │  HTTP server:         │
         │  MQ135  -> gas       │         │   /  /stream /capture │
         └──────────┬───────────┘         └───────────┬──────────┘
                    │                                 │
@@ -80,7 +80,7 @@ capability it does not have.
 - Every **10 seconds** pushes a heartbeat to `devices/fridge_01/sensors`:
 
   ```json
-  { "weight": 482, "temperature": 5.8, "gas": 1350,
+  { "weight": 482, "temperature": 5.8, "humidity": 47, "gas": 1350,
     "updatedAt": 1710000000, "alive": true }
   ```
 
