@@ -9,6 +9,7 @@ import 'screens/product_list_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/firebase_service.dart';
 import 'utils/status_colors.dart';
+import 'widgets/auto_registration_listener.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,7 +87,9 @@ class _HomeShellState extends State<HomeShell> {
         children: <Widget>[
           if (FirebaseService.demoMode) const _DemoBanner(),
           Expanded(
-            child: IndexedStack(index: _index, children: _screens),
+            child: AutoRegistrationListener(
+              child: IndexedStack(index: _index, children: _screens),
+            ),
           ),
         ],
       ),

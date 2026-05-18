@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/alert.dart';
 import '../models/camera_info.dart';
+import '../models/detection_event.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import '../services/firebase_service.dart';
@@ -19,14 +20,6 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Smart Fridge')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-              builder: (_) => const AddProductScreen()),
-        ),
-        icon: const Icon(Icons.qr_code_scanner),
-        label: const Text('Add Product'),
-      ),
       body: const _DashboardBody(),
     );
   }
@@ -64,6 +57,9 @@ class _DashboardBody extends StatelessWidget {
                   productCount: products.length,
                 ),
                 const SizedBox(height: 8),
+                const _SectionTitle('Automatic product detection'),
+                const _AutoDetectionCard(),
+                const SizedBox(height: 16),
                 const _SectionTitle('Environment'),
                 _SensorGrid(sensors: sensors),
                 const SizedBox(height: 16),
@@ -93,6 +89,100 @@ class _SectionTitle extends StatelessWidget {
         text,
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
       ),
+    );
+  }
+}
+
+/// Explains the automatic registration flow and shows its live status.
+/// In demo mode it offers a button to simulate placing a product.
+class _AutoDetectionCard extends StatelessWidget {
+  const _AutoDetectionCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DetectionEvent>(
+      stream: FirebaseService.detectionStream(),
+      builder: (BuildContext context, AsyncSnapshot<DetectionEvent> snap) {
+        final DetectionEvent event = snap.data ?? DetectionEvent();
+        final bool busy = event.newProductDetected && event.isAddition;
+
+        String statusLine;
+        IconData statusIcon;
+        Color statusColor;
+        if (busy) {
+          statusLine = 'Product detected — capturing & registering...';
+          statusIcon = Icons.autorenew;
+          statusColor = StatusColors.consumeSoon;
+        } else if (event.isRemoval) {
+          statusLine =
+              'Last event: product removed (${event.weightDelta} g).';
+          statusIcon = Icons.remove_circle_outline;
+          statusColor = StatusColors.neutral;
+        } else {
+          statusLine = 'Listening — place a product on the scale.';
+          statusIcon = Icons.sensors;
+          statusColor = StatusColors.fresh;
+        }
+
+        return Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Icon(statusIcon, color: statusColor, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        statusLine,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Products register automatically: the load cell detects '
+                  'the weight change, the camera captures the QR code, and '
+                  'the product is added on its own.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    if (FirebaseService.demoMode)
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: busy
+                              ? null
+                              : () => FirebaseService.simulateProductPlaced(),
+                          icon: const Icon(Icons.add_circle_outline, size: 18),
+                          label: const Text('Simulate product on scale'),
+                        ),
+                      ),
+                    if (FirebaseService.demoMode) const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                              builder: (_) => const AddProductScreen()),
+                        ),
+                        icon: const Icon(Icons.qr_code_scanner, size: 18),
+                        label: const Text('Manual scan'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

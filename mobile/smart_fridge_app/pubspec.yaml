@@ -16,8 +16,13 @@ dependencies:
   firebase_core: ^3.6.0
   firebase_database: ^11.1.4
 
-  # QR code scanning
+  # QR code scanning (live camera, used by the backup manual scan)
   mobile_scanner: ^5.2.3
+
+  # Automatic registration: fetch the ESP32-CAM image and decode its QR.
+  http: ^1.2.2          # fetch the /capture image
+  image: ^4.3.0         # decode the JPEG into pixels
+  zxing2: ^0.2.3        # pure-Dart QR decoding (works on mobile and web)
 
   # Date / time formatting
   intl: ^0.19.0

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../models/alert.dart';
 import '../models/camera_info.dart';
+import '../models/detection_event.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 
@@ -22,6 +23,12 @@ class DemoRepository {
   late CameraInfo _camera;
   final List<Product> _products = <Product>[];
   final List<Alert> _alerts = <Alert>[];
+  DetectionEvent _detection = DetectionEvent();
+
+  // Products the simulated load cell / camera can "detect", and a cursor.
+  final List<Product> _simulationPool = <Product>[];
+  int _simIndex = 0;
+  Product? _pendingSimulatedProduct;
 
   // --- Broadcast controllers ---
   final StreamController<SensorData> _sensorCtrl =
@@ -32,6 +39,8 @@ class DemoRepository {
       StreamController<List<Product>>.broadcast();
   final StreamController<List<Alert>> _alertsCtrl =
       StreamController<List<Alert>>.broadcast();
+  final StreamController<DetectionEvent> _detectionCtrl =
+      StreamController<DetectionEvent>.broadcast();
 
   void _seed() {
     final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -137,6 +146,76 @@ class DemoRepository {
       ),
     ]);
 
+    // Products the "simulate placing a product" demo action will register,
+    // one per tap. These mimic what a real QR scan of the camera would yield.
+    _simulationPool.addAll(<Product>[
+      Product(
+        productId: 'apple_001',
+        name: 'Apple',
+        category: 'Fruit',
+        brand: 'Generic',
+        expiryDate: dateIn(12),
+        addedDate: dateAgo(0),
+        expectedWeight: 180,
+        weightMin: 140,
+        weightMax: 220,
+        storageType: 'Cool',
+        currentWeight: 176,
+      ),
+      Product(
+        productId: 'cucumber_001',
+        name: 'Cucumber',
+        category: 'Vegetable',
+        brand: 'Generic',
+        expiryDate: dateIn(5),
+        addedDate: dateAgo(0),
+        expectedWeight: 200,
+        weightMin: 150,
+        weightMax: 260,
+        storageType: 'Cool',
+        currentWeight: 205,
+      ),
+      Product(
+        productId: 'yogurt_001',
+        name: 'Yogurt Cup',
+        category: 'Dairy',
+        brand: 'Example Brand',
+        expiryDate: dateIn(10),
+        addedDate: dateAgo(0),
+        expectedWeight: 200,
+        weightMin: 180,
+        weightMax: 220,
+        storageType: 'Cold',
+        currentWeight: 198,
+      ),
+      Product(
+        productId: 'cheese_001',
+        name: 'Cheese Package',
+        category: 'Dairy',
+        brand: 'Example Brand',
+        expiryDate: dateIn(28),
+        addedDate: dateAgo(0),
+        expectedWeight: 400,
+        weightMin: 360,
+        weightMax: 440,
+        storageType: 'Cold',
+        currentWeight: 392,
+      ),
+      Product(
+        productId: 'packaged_001',
+        name: 'Packaged Food',
+        category: 'Packaged Food',
+        brand: 'Example Brand',
+        expiryDate: dateIn(120),
+        addedDate: dateAgo(0),
+        expectedWeight: 350,
+        weightMin: 330,
+        weightMax: 370,
+        storageType: 'Ambient',
+        currentWeight: 351,
+      ),
+    ]);
+
     // Gently drift the sensor values so the dashboard feels alive.
     // The repository is an app-lifetime singleton, so this timer is never
     // cancelled by design.
@@ -185,6 +264,11 @@ class DemoRepository {
     yield* _alertsCtrl.stream;
   }
 
+  Stream<DetectionEvent> detectionStream() async* {
+    yield _detection;
+    yield* _detectionCtrl.stream;
+  }
+
   List<Alert> _sortedAlerts() {
     final List<Alert> list = List<Alert>.of(_alerts);
     list.sort((Alert a, Alert b) => b.createdAt.compareTo(a.createdAt));
@@ -219,5 +303,40 @@ class DemoRepository {
   void deleteAlert(String alertId) {
     _alerts.removeWhere((Alert a) => a.id == alertId);
     _alertsCtrl.add(_sortedAlerts());
+  }
+
+  // --- Automatic detection (demo simulation) ---
+
+  /// Clear the detection flag (called after a product is registered).
+  void resetDetection() {
+    _detection = DetectionEvent();
+    _detectionCtrl.add(_detection);
+  }
+
+  /// Demo action: pretend a product was placed on the load cell. This fires
+  /// a detection event exactly like the ESP32 DevKit would, so the automatic
+  /// registration flow can be demonstrated without any hardware.
+  void simulateProductPlaced() {
+    if (_simulationPool.isEmpty) return;
+    final Product product =
+        _simulationPool[_simIndex % _simulationPool.length];
+    _simIndex++;
+    _pendingSimulatedProduct = product;
+    _detection = DetectionEvent(
+      newProductDetected: true,
+      eventType: 'added',
+      weightDelta: product.expectedWeight,
+      stableWeight: _totalWeight() + product.expectedWeight,
+      updatedAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    );
+    _detectionCtrl.add(_detection);
+  }
+
+  /// The product the simulated camera "sees" for the current event.
+  /// Returns null once consumed.
+  Product? takePendingSimulatedProduct() {
+    final Product? p = _pendingSimulatedProduct;
+    _pendingSimulatedProduct = null;
+    return p;
   }
 }

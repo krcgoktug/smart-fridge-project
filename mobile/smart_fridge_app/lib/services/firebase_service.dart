@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../app_config.dart';
 import '../models/alert.dart';
 import '../models/camera_info.dart';
+import '../models/detection_event.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import 'demo_data.dart';
@@ -53,6 +54,14 @@ class FirebaseService {
       });
       return list;
     });
+  }
+
+  /// Live weight-detection events from the ESP32 DevKit.
+  static Stream<DetectionEvent> detectionStream() {
+    if (demoMode) return _demo.detectionStream();
+    return _root.child('detection').onValue.map(
+          (DatabaseEvent e) => DetectionEvent.fromMap(_asMap(e.snapshot.value)),
+        );
   }
 
   static Stream<List<Alert>> alertsStream() {
@@ -126,6 +135,25 @@ class FirebaseService {
       return;
     }
     await _root.child('alerts/$alertId').remove();
+  }
+
+  /// Demo-only: simulate a product being placed on the load cell. In real
+  /// (Firebase-connected) mode this is a no-op — the ESP32 DevKit is the
+  /// real trigger.
+  static void simulateProductPlaced() {
+    if (demoMode) _demo.simulateProductPlaced();
+  }
+
+  /// Clear the detection flag after a product has been registered.
+  static Future<void> resetDetection() async {
+    if (demoMode) {
+      _demo.resetDetection();
+      return;
+    }
+    await _root.child('detection').update(<String, dynamic>{
+      'newProductDetected': false,
+      'eventType': 'none',
+    });
   }
 
   // --- Helpers ---------------------------------------------------------------

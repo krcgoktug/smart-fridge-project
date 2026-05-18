@@ -17,11 +17,12 @@ class ProductListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Products')),
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Manual scan (backup)',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
               builder: (_) => const AddProductScreen()),
         ),
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.qr_code_scanner),
       ),
       body: const _ProductListBody(),
     );
@@ -97,16 +98,23 @@ class _EmptyProducts extends StatelessWidget {
               style:
                   TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          const Text('Scan a product QR code to get started.',
-              style: TextStyle(color: Colors.black54)),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              'Place a product on the load-cell scale — it registers '
+              'itself automatically.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black54),
+            ),
+          ),
           const SizedBox(height: 16),
-          FilledButton.icon(
+          OutlinedButton.icon(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                   builder: (_) => const AddProductScreen()),
             ),
             icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR code'),
+            label: const Text('Manual scan (backup)'),
           ),
         ],
       ),

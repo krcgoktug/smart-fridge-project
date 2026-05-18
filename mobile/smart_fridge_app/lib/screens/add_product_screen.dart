@@ -132,7 +132,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Product'),
+        title: const Text('Manual Scan (Backup)'),
         actions: <Widget>[
           IconButton(
             tooltip: 'Enter manually',
@@ -156,6 +156,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
       ),
       body: Column(
               children: <Widget>[
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFFEFF4EF),
+                  padding: const EdgeInsets.all(12),
+                  child: const Text(
+                    'Products normally register automatically when placed '
+                    'on the scale. Use this manual scan only as a backup.',
+                    style: TextStyle(fontSize: 12, color: Colors.black87),
+                  ),
+                ),
                 Expanded(
                   child: Stack(
                     alignment: Alignment.center,
