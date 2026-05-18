@@ -101,8 +101,8 @@ class _EmptyProducts extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 32),
             child: Text(
-              'Place a product on the load-cell scale — it registers '
-              'itself automatically.',
+              'Register a product by scanning its QR code — use '
+              '"Scan QR from Camera" on the Camera screen.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.black54),
             ),
@@ -114,7 +114,7 @@ class _EmptyProducts extends StatelessWidget {
                   builder: (_) => const AddProductScreen()),
             ),
             icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Manual scan (backup)'),
+            label: const Text('Manual scan (phone camera)'),
           ),
         ],
       ),

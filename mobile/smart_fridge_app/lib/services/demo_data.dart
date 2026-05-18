@@ -1,16 +1,16 @@
 import 'dart:async';
 
 import '../models/alert.dart';
+import '../models/banana_analysis.dart';
 import '../models/camera_info.dart';
-import '../models/detection_event.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 
 /// In-memory data source used when Firebase is not configured.
 ///
 /// It lets the whole app be explored — populated with realistic sample data —
-/// without any Firebase project. Scanning/adding/deleting products and alerts
-/// all work and update the UI live; the data simply is not persisted.
+/// without any Firebase project. Scanning, banana analysis, deleting products
+/// and alerts all work and update the UI live; the data is not persisted.
 class DemoRepository {
   DemoRepository._() {
     _seed();
@@ -23,12 +23,7 @@ class DemoRepository {
   late CameraInfo _camera;
   final List<Product> _products = <Product>[];
   final List<Alert> _alerts = <Alert>[];
-  DetectionEvent _detection = DetectionEvent();
-
-  // Products the simulated load cell / camera can "detect", and a cursor.
-  final List<Product> _simulationPool = <Product>[];
-  int _simIndex = 0;
-  Product? _pendingSimulatedProduct;
+  final List<BananaAnalysis> _bananaAnalyses = <BananaAnalysis>[];
 
   // --- Broadcast controllers ---
   final StreamController<SensorData> _sensorCtrl =
@@ -39,8 +34,8 @@ class DemoRepository {
       StreamController<List<Product>>.broadcast();
   final StreamController<List<Alert>> _alertsCtrl =
       StreamController<List<Alert>>.broadcast();
-  final StreamController<DetectionEvent> _detectionCtrl =
-      StreamController<DetectionEvent>.broadcast();
+  final StreamController<List<BananaAnalysis>> _bananaCtrl =
+      StreamController<List<BananaAnalysis>>.broadcast();
 
   void _seed() {
     final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -56,14 +51,20 @@ class DemoRepository {
     );
 
     _camera = CameraInfo(
-      streamUrl: 'http://172.19.15.112',
-      captureUrl: 'http://172.19.15.112/capture',
+      streamUrl: 'http://192.168.1.50',
+      captureUrl: 'http://192.168.1.50/capture',
     );
 
-    String dateIn(int days) =>
-        DateTime.now().add(Duration(days: days)).toIso8601String().split('T').first;
-    String dateAgo(int days) =>
-        DateTime.now().subtract(Duration(days: days)).toIso8601String().split('T').first;
+    String dateIn(int days) => DateTime.now()
+        .add(Duration(days: days))
+        .toIso8601String()
+        .split('T')
+        .first;
+    String dateAgo(int days) => DateTime.now()
+        .subtract(Duration(days: days))
+        .toIso8601String()
+        .split('T')
+        .first;
 
     _products.addAll(<Product>[
       Product(
@@ -78,7 +79,7 @@ class DemoRepository {
         weightMax: 180,
         storageType: 'Cool',
         currentWeight: 142,
-        browningRatio: 0.32,
+        browningRatio: 0.25,
         visualStatus: 'Browning Detected',
       ),
       Product(
@@ -132,13 +133,6 @@ class DemoRepository {
       ),
       Alert(
         id: 'alert_002',
-        message: 'Banana browning detected by the camera.',
-        severity: 'warning',
-        productId: 'banana_001',
-        createdAt: now - 1800,
-      ),
-      Alert(
-        id: 'alert_003',
         message: 'Tomato should be consumed within a day.',
         severity: 'danger',
         productId: 'tomato_001',
@@ -146,79 +140,19 @@ class DemoRepository {
       ),
     ]);
 
-    // Products the "simulate placing a product" demo action will register,
-    // one per tap. These mimic what a real QR scan of the camera would yield.
-    _simulationPool.addAll(<Product>[
-      Product(
-        productId: 'apple_001',
-        name: 'Apple',
-        category: 'Fruit',
-        brand: 'Generic',
-        expiryDate: dateIn(12),
-        addedDate: dateAgo(0),
-        expectedWeight: 180,
-        weightMin: 140,
-        weightMax: 220,
-        storageType: 'Cool',
-        currentWeight: 176,
-      ),
-      Product(
-        productId: 'cucumber_001',
-        name: 'Cucumber',
-        category: 'Vegetable',
-        brand: 'Generic',
-        expiryDate: dateIn(5),
-        addedDate: dateAgo(0),
-        expectedWeight: 200,
-        weightMin: 150,
-        weightMax: 260,
-        storageType: 'Cool',
-        currentWeight: 205,
-      ),
-      Product(
-        productId: 'yogurt_001',
-        name: 'Yogurt Cup',
-        category: 'Dairy',
-        brand: 'Example Brand',
-        expiryDate: dateIn(10),
-        addedDate: dateAgo(0),
-        expectedWeight: 200,
-        weightMin: 180,
-        weightMax: 220,
-        storageType: 'Cold',
-        currentWeight: 198,
-      ),
-      Product(
-        productId: 'cheese_001',
-        name: 'Cheese Package',
-        category: 'Dairy',
-        brand: 'Example Brand',
-        expiryDate: dateIn(28),
-        addedDate: dateAgo(0),
-        expectedWeight: 400,
-        weightMin: 360,
-        weightMax: 440,
-        storageType: 'Cold',
-        currentWeight: 392,
-      ),
-      Product(
-        productId: 'packaged_001',
-        name: 'Packaged Food',
-        category: 'Packaged Food',
-        brand: 'Example Brand',
-        expiryDate: dateIn(120),
-        addedDate: dateAgo(0),
-        expectedWeight: 350,
-        weightMin: 330,
-        weightMax: 370,
-        storageType: 'Ambient',
-        currentWeight: 351,
-      ),
-    ]);
+    _bananaAnalyses.add(BananaAnalysis(
+      productId: 'banana_001',
+      brownSpotPercentage: 18.4,
+      darkSpotPercentage: 6.2,
+      totalBrowningPercentage: 24.6,
+      visualStatus: 'Slight Browning',
+      updatedAt: now - 900,
+    ));
 
     // Gently drift the sensor values so the dashboard feels alive.
     // The repository is an app-lifetime singleton, so this timer is never
-    // cancelled by design.
+    // cancelled by design. updatedAt stays current so the demo sensor
+    // board always reads as "online".
     Timer.periodic(const Duration(seconds: 5), (_) {
       final int tick = DateTime.now().second;
       _sensors = SensorData(
@@ -264,9 +198,9 @@ class DemoRepository {
     yield* _alertsCtrl.stream;
   }
 
-  Stream<DetectionEvent> detectionStream() async* {
-    yield _detection;
-    yield* _detectionCtrl.stream;
+  Stream<List<BananaAnalysis>> bananaAnalysisStream() async* {
+    yield List<BananaAnalysis>.unmodifiable(_bananaAnalyses);
+    yield* _bananaCtrl.stream;
   }
 
   List<Alert> _sortedAlerts() {
@@ -305,38 +239,20 @@ class DemoRepository {
     _alertsCtrl.add(_sortedAlerts());
   }
 
-  // --- Automatic detection (demo simulation) ---
+  void saveBananaAnalysis(BananaAnalysis analysis) {
+    _bananaAnalyses
+        .removeWhere((BananaAnalysis a) => a.productId == analysis.productId);
+    _bananaAnalyses.add(analysis);
+    _bananaCtrl.add(List<BananaAnalysis>.unmodifiable(_bananaAnalyses));
 
-  /// Clear the detection flag (called after a product is registered).
-  void resetDetection() {
-    _detection = DetectionEvent();
-    _detectionCtrl.add(_detection);
-  }
-
-  /// Demo action: pretend a product was placed on the load cell. This fires
-  /// a detection event exactly like the ESP32 DevKit would, so the automatic
-  /// registration flow can be demonstrated without any hardware.
-  void simulateProductPlaced() {
-    if (_simulationPool.isEmpty) return;
-    final Product product =
-        _simulationPool[_simIndex % _simulationPool.length];
-    _simIndex++;
-    _pendingSimulatedProduct = product;
-    _detection = DetectionEvent(
-      newProductDetected: true,
-      eventType: 'added',
-      weightDelta: product.expectedWeight,
-      stableWeight: _totalWeight() + product.expectedWeight,
-      updatedAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    );
-    _detectionCtrl.add(_detection);
-  }
-
-  /// The product the simulated camera "sees" for the current event.
-  /// Returns null once consumed.
-  Product? takePendingSimulatedProduct() {
-    final Product? p = _pendingSimulatedProduct;
-    _pendingSimulatedProduct = null;
-    return p;
+    // Mirror the browning figure onto the product, like Firebase mode.
+    final int idx =
+        _products.indexWhere((Product p) => p.productId == analysis.productId);
+    if (idx >= 0) {
+      _products[idx].browningRatio =
+          analysis.totalBrowningPercentage / 100.0;
+      _products[idx].visualStatus = analysis.visualStatus;
+      _productsCtrl.add(List<Product>.unmodifiable(_products));
+    }
   }
 }

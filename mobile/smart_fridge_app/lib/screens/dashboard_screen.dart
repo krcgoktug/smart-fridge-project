@@ -1,18 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/alert.dart';
 import '../models/camera_info.dart';
-import '../models/detection_event.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import '../services/firebase_service.dart';
 import '../services/risk_service.dart';
+import '../services/settings_service.dart';
 import '../utils/status_colors.dart';
 import '../widgets/sensor_card.dart';
 import '../widgets/status_badge.dart';
-import 'add_product_screen.dart';
 
-/// Screen 1 - Dashboard. Live sensors, global risk, camera, latest alerts.
+/// True when the sensor data is fresh (updated within the last 60 s).
+bool sensorsOnline(SensorData s) {
+  if (s.updatedAt <= 0) return false;
+  final int now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  return (now - s.updatedAt) <= 60;
+}
+
+/// Screen 1 - Dashboard. Sensor status, global risk, camera, latest alerts.
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
@@ -25,8 +33,31 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
-class _DashboardBody extends StatelessWidget {
+class _DashboardBody extends StatefulWidget {
   const _DashboardBody();
+
+  @override
+  State<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends State<_DashboardBody> {
+  Timer? _refresh;
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-evaluate the ESP32 online/offline timeout periodically, even when
+    // no new sensor data arrives.
+    _refresh = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,12 +65,13 @@ class _DashboardBody extends StatelessWidget {
       stream: FirebaseService.sensorStream(),
       builder: (BuildContext context, AsyncSnapshot<SensorData> sensorSnap) {
         final SensorData sensors = sensorSnap.data ?? SensorData();
+        final bool online = sensorsOnline(sensors);
+
         return StreamBuilder<List<Product>>(
           stream: FirebaseService.productsStream(),
           builder: (BuildContext context,
               AsyncSnapshot<List<Product>> productSnap) {
             final List<Product> products = productSnap.data ?? <Product>[];
-            // Recompute each product's risk against the current sensors.
             for (final Product p in products) {
               RiskService.applyToProduct(p, sensors);
             }
@@ -49,7 +81,7 @@ class _DashboardBody extends StatelessWidget {
                 RiskService.statusFromScore(globalScore);
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
               children: <Widget>[
                 _GlobalRiskCard(
                   score: globalScore,
@@ -57,11 +89,14 @@ class _DashboardBody extends StatelessWidget {
                   productCount: products.length,
                 ),
                 const SizedBox(height: 8),
-                const _SectionTitle('Automatic product detection'),
-                const _AutoDetectionCard(),
+                const _SectionTitle('ESP32 sensor board'),
+                _SensorStatusCard(sensors: sensors, online: online),
                 const SizedBox(height: 16),
                 const _SectionTitle('Environment'),
-                _SensorGrid(sensors: sensors),
+                if (online)
+                  _SensorGrid(sensors: sensors)
+                else
+                  const _OfflineNotice(),
                 const SizedBox(height: 16),
                 const _SectionTitle('Camera'),
                 const _CameraPreviewCard(),
@@ -93,96 +128,87 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-/// Explains the automatic registration flow and shows its live status.
-/// In demo mode it offers a button to simulate placing a product.
-class _AutoDetectionCard extends StatelessWidget {
-  const _AutoDetectionCard();
+/// Online/offline status of the (optional) ESP32 sensor board.
+class _SensorStatusCard extends StatelessWidget {
+  const _SensorStatusCard({required this.sensors, required this.online});
+
+  final SensorData sensors;
+  final bool online;
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DetectionEvent>(
-      stream: FirebaseService.detectionStream(),
-      builder: (BuildContext context, AsyncSnapshot<DetectionEvent> snap) {
-        final DetectionEvent event = snap.data ?? DetectionEvent();
-        final bool busy = event.newProductDetected && event.isAddition;
+    final Color color = online ? StatusColors.fresh : StatusColors.spoilage;
+    final String title =
+        online ? 'ESP32 sensor board online' : 'ESP32 not connected';
+    final String subtitle = online
+        ? 'Live sensor data is up to date.'
+        : 'Sensor data unavailable. QR scanning and the camera still work.';
 
-        String statusLine;
-        IconData statusIcon;
-        Color statusColor;
-        if (busy) {
-          statusLine = 'Product detected — capturing & registering...';
-          statusIcon = Icons.autorenew;
-          statusColor = StatusColors.consumeSoon;
-        } else if (event.isRemoval) {
-          statusLine =
-              'Last event: product removed (${event.weightDelta} g).';
-          statusIcon = Icons.remove_circle_outline;
-          statusColor = StatusColors.neutral;
-        } else {
-          statusLine = 'Listening — place a product on the scale.';
-          statusIcon = Icons.sensors;
-          statusColor = StatusColors.fresh;
-        }
-
-        return Card(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Icon(statusIcon, color: statusColor, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        statusLine,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Products register automatically: the load cell detects '
-                  'the weight change, the camera captures the QR code, and '
-                  'the product is added on its own.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    if (FirebaseService.demoMode)
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: busy
-                              ? null
-                              : () => FirebaseService.simulateProductPlaced(),
-                          icon: const Icon(Icons.add_circle_outline, size: 18),
-                          label: const Text('Simulate product on scale'),
-                        ),
-                      ),
-                    if (FirebaseService.demoMode) const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                              builder: (_) => const AddProductScreen()),
-                        ),
-                        icon: const Icon(Icons.qr_code_scanner, size: 18),
-                        label: const Text('Manual scan'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: <Widget>[
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                online ? Icons.cloud_done : Icons.cloud_off,
+                color: color,
+                size: 22,
+              ),
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(title,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, color: color)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.black54)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OfflineNotice extends StatelessWidget {
+  const _OfflineNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFFFDECEA),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.sensors_off, color: StatusColors.spoilage),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'ESP32 not connected / sensor data unavailable.\n'
+                'Temperature, humidity, gas and weight are not being '
+                'reported right now.',
+                style: TextStyle(fontSize: 13, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -268,7 +294,7 @@ class _SensorGrid extends StatelessWidget {
       ),
       SensorCard(
         icon: Icons.scale,
-        label: 'Total weight',
+        label: 'Weight',
         value: sensors.weight.toStringAsFixed(0),
         unit: 'g',
         color: const Color(0xFF5D4037),
@@ -295,6 +321,24 @@ class _CameraPreviewCard extends StatelessWidget {
       stream: FirebaseService.cameraStream(),
       builder: (BuildContext context, AsyncSnapshot<CameraInfo> snap) {
         final CameraInfo cam = snap.data ?? CameraInfo();
+        final String captureUrl =
+            SettingsService.resolveCaptureUrl(cam.captureUrl);
+
+        Widget thumb;
+        if (FirebaseService.demoMode) {
+          thumb = Image.asset('assets/demo/sample_banana.png',
+              fit: BoxFit.cover);
+        } else if (captureUrl.isNotEmpty) {
+          thumb = Image.network(
+            captureUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.videocam_off, color: Colors.black38),
+          );
+        } else {
+          thumb = const Icon(Icons.videocam_off, color: Colors.black38);
+        }
+
         return Card(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -309,19 +353,8 @@ class _CameraPreviewCard extends StatelessWidget {
                     color: Colors.black12,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: cam.hasUrls
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            cam.captureUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                                Icons.videocam_off,
-                                color: Colors.black38),
-                          ),
-                        )
-                      : const Icon(Icons.videocam_off,
-                          color: Colors.black38),
+                  clipBehavior: Clip.antiAlias,
+                  child: thumb,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -329,13 +362,14 @@ class _CameraPreviewCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       const Text('ESP32-CAM',
-                          style:
-                              TextStyle(fontWeight: FontWeight.w600)),
+                          style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Text(
-                        cam.hasUrls
-                            ? cam.captureUrl!
-                            : 'No camera URL published yet',
+                        FirebaseService.demoMode
+                            ? 'Demo mode — sample image'
+                            : (captureUrl.isEmpty
+                                ? 'Set the camera IP in Settings'
+                                : captureUrl),
                         style: const TextStyle(
                             fontSize: 12, color: Colors.black54),
                         maxLines: 2,

@@ -28,6 +28,8 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final String expiryStatus = product.expiryStatus();
+    final Color expiryColor = StatusColors.forExpiryStatus(expiryStatus);
     final Color riskColor = StatusColors.forScore(product.riskScore);
     return Card(
       elevation: 1.5,
@@ -39,16 +41,16 @@ class ProductCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: <Widget>[
-              // Risk color strip + category icon.
+              // Expiry-status color tile + category icon.
               Container(
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: riskColor.withValues(alpha: 0.15),
+                  color: expiryColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(_categoryIcon(product.category),
-                    color: riskColor, size: 24),
+                    color: expiryColor, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -87,7 +89,11 @@ class ProductCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
-                  StatusBadge(status: product.status, compact: true),
+                  StatusBadge(
+                    status: expiryStatus,
+                    compact: true,
+                    color: expiryColor,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'risk ${product.riskScore.toInt()}',

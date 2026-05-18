@@ -15,13 +15,43 @@ class StatusColors {
     return fresh;
   }
 
-  /// Color for a status string.
+  /// Color for a risk-score status string.
   static Color forStatus(String status) {
     switch (status) {
       case 'Spoilage Risk':
         return spoilage;
       case 'Consume Soon':
         return consumeSoon;
+      case 'Fresh':
+        return fresh;
+      default:
+        return neutral;
+    }
+  }
+
+  /// Color for an expiry-based status (Fresh / Expiring Soon / Expired).
+  static Color forExpiryStatus(String status) {
+    switch (status) {
+      case 'Expired':
+        return spoilage;
+      case 'Expiring Soon':
+        return consumeSoon;
+      case 'Fresh':
+        return fresh;
+      default:
+        return neutral;
+    }
+  }
+
+  /// Color for a banana visual status.
+  static Color forVisualStatus(String status) {
+    switch (status) {
+      case 'Consume Soon':
+        return spoilage;
+      case 'Browning Detected':
+        return consumeSoon;
+      case 'Slight Browning':
+        return const Color(0xFFEF9A3D);
       case 'Fresh':
         return fresh;
       default:

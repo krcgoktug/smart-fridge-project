@@ -78,8 +78,16 @@ Anyone can open it from a phone or laptop browser — no install needed:
 
 **https://krcgoktug.github.io/smart-fridge-project/**
 
-The deployed build runs in **demo mode** (built-in sample data), so it works
-fully without any Firebase setup — ideal for presentations.
+The deployed build runs in **demo mode** (built-in sample data: a sample QR
+image and a sample banana image), so it works fully without any Firebase or
+hardware setup — ideal for presentations.
+
+> **Hardware mode on GitHub Pages:** the demo site is served over **HTTPS**,
+> but the ESP32-CAM is a plain **HTTP** device on the local network. Browsers
+> block "mixed content", so the live camera (QR scan / banana analysis with a
+> real device) **will not work on the GitHub Pages URL**. For Hardware mode,
+> run the app as an installed mobile app, or serve it locally over `http://`.
+> Demo mode works everywhere.
 
 > GitHub Pages source is set to **GitHub Actions**, so every push to `main`
 > redeploys automatically. The workflow can also be run manually from the

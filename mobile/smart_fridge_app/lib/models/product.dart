@@ -64,6 +64,22 @@ class Product {
   bool get isFruitOrVegetable =>
       category == 'Fruit' || category == 'Vegetable';
 
+  bool get isBanana => name.toLowerCase().contains('banana');
+
+  /// Expiry-based status derived purely from the expiry date:
+  ///   Expired       -> past the expiry date
+  ///   Expiring Soon -> 3 days (72 h) or less remaining
+  ///   Fresh         -> more than 3 days remaining
+  String expiryStatus() {
+    final int hours = remainingHours?.toInt() ?? hoursUntilExpiry();
+    if (hours <= 0) return 'Expired';
+    if (hours <= 72) return 'Expiring Soon';
+    return 'Fresh';
+  }
+
+  /// True when the product needs an expiry warning.
+  bool get expiryNeedsWarning => expiryStatus() != 'Fresh';
+
   /// Build a product from a scanned QR JSON map.
   factory Product.fromQrJson(Map<String, dynamic> json) {
     return Product(

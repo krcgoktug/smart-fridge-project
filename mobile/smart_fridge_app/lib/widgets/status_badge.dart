@@ -4,14 +4,22 @@ import '../utils/status_colors.dart';
 
 /// A small colored pill showing a status word.
 class StatusBadge extends StatelessWidget {
-  const StatusBadge({super.key, required this.status, this.compact = false});
+  const StatusBadge({
+    super.key,
+    required this.status,
+    this.compact = false,
+    this.color,
+  });
 
   final String status;
   final bool compact;
 
+  /// Optional explicit color; defaults to the risk-status palette.
+  final Color? color;
+
   @override
   Widget build(BuildContext context) {
-    final Color color = StatusColors.forStatus(status);
+    final Color color = this.color ?? StatusColors.forStatus(status);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 8 : 12,

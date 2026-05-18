@@ -8,11 +8,14 @@ import 'screens/dashboard_screen.dart';
 import 'screens/product_list_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/firebase_service.dart';
+import 'services/settings_service.dart';
 import 'utils/status_colors.dart';
-import 'widgets/auto_registration_listener.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load persisted settings (e.g. the ESP32-CAM address).
+  await SettingsService.init();
 
   // Try to initialise Firebase. With the committed placeholder config this
   // succeeds structurally; data calls only work once the user runs
@@ -87,9 +90,7 @@ class _HomeShellState extends State<HomeShell> {
         children: <Widget>[
           if (FirebaseService.demoMode) const _DemoBanner(),
           Expanded(
-            child: AutoRegistrationListener(
-              child: IndexedStack(index: _index, children: _screens),
-            ),
+            child: IndexedStack(index: _index, children: _screens),
           ),
         ],
       ),

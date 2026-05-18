@@ -2,8 +2,8 @@ import 'package:firebase_database/firebase_database.dart';
 
 import '../app_config.dart';
 import '../models/alert.dart';
+import '../models/banana_analysis.dart';
 import '../models/camera_info.dart';
-import '../models/detection_event.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import 'demo_data.dart';
@@ -56,12 +56,21 @@ class FirebaseService {
     });
   }
 
-  /// Live weight-detection events from the ESP32 DevKit.
-  static Stream<DetectionEvent> detectionStream() {
-    if (demoMode) return _demo.detectionStream();
-    return _root.child('detection').onValue.map(
-          (DatabaseEvent e) => DetectionEvent.fromMap(_asMap(e.snapshot.value)),
-        );
+  /// Live banana browning analysis results, keyed by productId.
+  static Stream<List<BananaAnalysis>> bananaAnalysisStream() {
+    if (demoMode) return _demo.bananaAnalysisStream();
+    return _root.child('bananaAnalysis').onValue.map((DatabaseEvent e) {
+      final Map<dynamic, dynamic>? map = _asMap(e.snapshot.value);
+      if (map == null) return <BananaAnalysis>[];
+      final List<BananaAnalysis> list = <BananaAnalysis>[];
+      map.forEach((dynamic key, dynamic value) {
+        final Map<dynamic, dynamic>? bm = _asMap(value);
+        if (bm != null) {
+          list.add(BananaAnalysis.fromMap(key.toString(), bm));
+        }
+      });
+      return list;
+    });
   }
 
   static Stream<List<Alert>> alertsStream() {
@@ -137,22 +146,20 @@ class FirebaseService {
     await _root.child('alerts/$alertId').remove();
   }
 
-  /// Demo-only: simulate a product being placed on the load cell. In real
-  /// (Firebase-connected) mode this is a no-op — the ESP32 DevKit is the
-  /// real trigger.
-  static void simulateProductPlaced() {
-    if (demoMode) _demo.simulateProductPlaced();
-  }
-
-  /// Clear the detection flag after a product has been registered.
-  static Future<void> resetDetection() async {
+  /// Save a banana browning analysis result. Also mirrors the browning
+  /// figure onto the product so the risk score stays consistent.
+  static Future<void> saveBananaAnalysis(BananaAnalysis analysis) async {
     if (demoMode) {
-      _demo.resetDetection();
+      _demo.saveBananaAnalysis(analysis);
       return;
     }
-    await _root.child('detection').update(<String, dynamic>{
-      'newProductDetected': false,
-      'eventType': 'none',
+    await _root
+        .child('bananaAnalysis/${analysis.productId}')
+        .set(analysis.toMap());
+    await _root.child('products/${analysis.productId}').update(<String, dynamic>{
+      'browningRatio': analysis.totalBrowningPercentage / 100.0,
+      'visualStatus': analysis.visualStatus,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
     });
   }
 

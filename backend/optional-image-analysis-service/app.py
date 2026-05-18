@@ -2,23 +2,21 @@
 Zero Waste Smart Fridge -- Optional Image Analysis Service
 ==========================================================
 
-Lightweight banana browning detection. NO machine learning.
+An OPTIONAL helper service. The Flutter app already does all of this on the
+phone; this lets the same work run on a laptop instead.
 
-It uses classic image processing only:
-  - HSV thresholding for brown/dark hues
-  - RGB darkness check
-  - brown-pixel ratio
-  - simple status mapping
+It mirrors two camera-driven features:
 
-Pipeline:
-  1. Fetch the latest JPEG from the ESP32-CAM /capture URL
-     (or read a local file in --file mode).
-  2. Compute `browningRatio` and `visualStatus`.
-  3. Optionally PATCH the result into Firebase Realtime Database at
-     /devices/<DEVICE_ID>/products/<PRODUCT_ID>.
+  1. QR product registration  -- fetch the ESP32-CAM image, decode the QR
+     code, and save the product under /devices/<id>/products/<productId>.
 
-This service is OPTIONAL. The Flutter app can do the same analysis itself;
-this exists so the work can run on a laptop instead of the phone.
+  2. Banana browning analysis  -- pixel-based (NO machine learning):
+       brownSpotPercentage, darkSpotPercentage, totalBrowningPercentage
+     are computed from simple RGB thresholds and saved under
+     /devices/<id>/bananaAnalysis/<productId>.
+
+The ESP32-CAM only provides the image; decoding/analysis happens here.
+There is no load-cell dependency anywhere.
 
 Config: copy .env.example -> .env  (see README.md). No secrets are committed.
 """
@@ -34,7 +32,7 @@ from datetime import datetime
 import numpy as np
 from PIL import Image
 
-# OpenCV is only needed for QR-code decoding (automatic registration).
+# OpenCV is only needed for QR-code decoding.
 try:
     import cv2
 except ImportError:  # pragma: no cover
@@ -46,7 +44,6 @@ except ImportError:  # pragma: no cover
     print("Missing dependency. Run: pip install -r requirements.txt")
     sys.exit(1)
 
-# Optional .env loading (the service still runs without python-dotenv).
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -59,7 +56,7 @@ from flask import Flask, jsonify, request
 # --------------------------------------------------------------------------
 # Configuration (all overridable via environment variables / .env)
 # --------------------------------------------------------------------------
-CAPTURE_URL = os.getenv("CAPTURE_URL", "http://172.19.15.112/capture")
+CAPTURE_URL = os.getenv("CAPTURE_URL", "http://192.168.1.50/capture")
 FIREBASE_HOST = os.getenv("FIREBASE_HOST", "").rstrip("/")
 FIREBASE_AUTH = os.getenv("FIREBASE_AUTH", "")
 DEVICE_ID = os.getenv("DEVICE_ID", "fridge_01")
@@ -67,61 +64,66 @@ HTTP_PORT = int(os.getenv("PORT", "5000"))
 
 
 # --------------------------------------------------------------------------
-# Core image analysis -- the banana browning detector
+# Banana browning analysis -- pixel-based, no ML
 # --------------------------------------------------------------------------
+def status_from_percentage(total: float) -> str:
+    """Map a total browning percentage (0-100) to a visual status."""
+    if total >= 50:
+        return "Consume Soon"
+    if total >= 25:
+        return "Browning Detected"
+    if total >= 10:
+        return "Slight Browning"
+    return "Fresh"
+
+
 def analyze_browning(image: Image.Image) -> dict:
-    """Return browningRatio (0..1) and visualStatus for a banana image.
-
-    A pixel counts as "brown/dark" when it is either:
-      * dark overall (low RGB brightness), or
-      * a brownish hue in HSV with moderate-to-low value.
-
-    Bright yellow banana pixels are explicitly excluded so a fresh banana
-    scores near zero.
+    """Classify each pixel with simple RGB thresholds and return the
+    brown / dark / total browning percentages of the banana region.
     """
     rgb = image.convert("RGB").resize((320, 240))
-    arr = np.asarray(rgb).astype(np.float32)
-
+    arr = np.asarray(rgb).astype(np.int32)
     r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
-
-    # --- RGB darkness: average brightness clearly below mid-range ---
     brightness = (r + g + b) / 3.0
-    dark_mask = brightness < 90.0
 
-    # --- HSV conversion (vectorised) ---
-    hsv = np.asarray(rgb.convert("HSV")).astype(np.float32)
-    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]  # all 0..255
+    dark = brightness < 60
+    brown = (~dark) & (brightness < 150) & (r > 60) & (r >= g) & \
+            (g >= b) & ((r - b) > 25)
+    yellow = (~dark) & (~brown) & (r > 140) & (g > 120) & ((r - b) > 45)
 
-    # Brown hue band: roughly orange-brown (~15-45 deg -> ~10-32 on 0..255),
-    # with enough saturation but a darkened value (not bright yellow).
-    brown_mask = (h >= 10) & (h <= 35) & (s >= 60) & (v < 150)
+    banana = dark | brown | yellow
+    banana_count = int(np.count_nonzero(banana))
+    if banana_count == 0:
+        return {
+            "brownSpotPercentage": 0.0,
+            "darkSpotPercentage": 0.0,
+            "totalBrowningPercentage": 0.0,
+            "visualStatus": "Fresh",
+        }
 
-    # --- Bright fresh-yellow pixels: explicitly NOT browning ---
-    fresh_yellow = (h >= 28) & (h <= 50) & (v >= 170) & (s >= 80)
-
-    brown_like = (dark_mask | brown_mask) & (~fresh_yellow)
-
-    total = brown_like.size
-    brown_pixels = int(np.count_nonzero(brown_like))
-    ratio = round(brown_pixels / total, 3) if total else 0.0
-
+    brown_pct = round(int(np.count_nonzero(brown)) / banana_count * 100, 1)
+    dark_pct = round(int(np.count_nonzero(dark)) / banana_count * 100, 1)
+    total = round(brown_pct + dark_pct, 1)
     return {
-        "browningRatio": ratio,
-        "visualStatus": status_from_ratio(ratio),
-        "brownPixels": brown_pixels,
-        "totalPixels": total,
+        "brownSpotPercentage": brown_pct,
+        "darkSpotPercentage": dark_pct,
+        "totalBrowningPercentage": total,
+        "visualStatus": status_from_percentage(total),
     }
 
 
-def status_from_ratio(ratio: float) -> str:
-    """Map a browning ratio to a human-readable visual status."""
-    if ratio < 0.10:
-        return "Fresh"
-    if ratio < 0.25:
-        return "Slight Browning"
-    if ratio < 0.50:
-        return "Browning Detected"
-    return "Consume Soon"
+# --------------------------------------------------------------------------
+# QR-code decoding
+# --------------------------------------------------------------------------
+def decode_qr_from_image(image: Image.Image):
+    """Decode a QR code from a PIL image. Returns the text, or None."""
+    if cv2 is None:
+        raise RuntimeError(
+            "opencv-python is required for QR decoding. "
+            "Run: pip install -r requirements.txt")
+    frame = np.asarray(image.convert("RGB"))
+    data, _points, _qr = cv2.QRCodeDetector().detectAndDecode(frame)
+    return data if data else None
 
 
 # --------------------------------------------------------------------------
@@ -141,81 +143,36 @@ def load_image_file(path: str) -> Image.Image:
 
 
 # --------------------------------------------------------------------------
-# Firebase write-back (Realtime Database REST API)
+# Firebase Realtime Database (REST API)
 # --------------------------------------------------------------------------
-def update_product_in_firebase(product_id: str, result: dict) -> bool:
-    """PATCH browningRatio + visualStatus onto a product node.
-
-    Returns False (without raising) if Firebase is not configured, so the
-    analysis still works as a pure local tool.
-    """
-    if not FIREBASE_HOST:
-        print("[Firebase] FIREBASE_HOST not set -- skipping write-back.")
-        return False
-
-    url = (f"{FIREBASE_HOST}/devices/{DEVICE_ID}/products/"
-           f"{product_id}.json")
-    if FIREBASE_AUTH:
-        url += f"?auth={FIREBASE_AUTH}"
-
-    payload = {
-        "browningRatio": result["browningRatio"],
-        "visualStatus": result["visualStatus"],
-        "updatedAt": int(time.time()),
-    }
-    resp = requests.patch(url, json=payload, timeout=10)
-    if resp.ok:
-        print(f"[Firebase] updated product '{product_id}'.")
-        return True
-    print(f"[Firebase] update failed: {resp.status_code} {resp.text}")
-    return False
-
-
-# --------------------------------------------------------------------------
-# Automatic product registration (the "or backend" option)
-#
-# Mirrors the app's automatic flow: when the ESP32 DevKit reports a weight
-# event on /detection, fetch the camera image, decode its QR code, save the
-# product, and reset the detection flag.
-# --------------------------------------------------------------------------
-def decode_qr_from_image(image: Image.Image):
-    """Decode a QR code from a PIL image. Returns the text, or None.
-
-    The ESP32-CAM only provides the image; the decoding happens here.
-    """
-    if cv2 is None:
-        raise RuntimeError(
-            "opencv-python is required for QR decoding. "
-            "Run: pip install -r requirements.txt")
-    frame = np.asarray(image.convert("RGB"))
-    data, _points, _qr = cv2.QRCodeDetector().detectAndDecode(frame)
-    return data if data else None
-
-
-def _detection_url() -> str:
-    url = f"{FIREBASE_HOST}/devices/{DEVICE_ID}/detection.json"
+def _node_url(path: str) -> str:
+    url = f"{FIREBASE_HOST}/devices/{DEVICE_ID}/{path}.json"
     if FIREBASE_AUTH:
         url += f"?auth={FIREBASE_AUTH}"
     return url
 
 
-def get_detection() -> dict:
-    """Read the current /detection node."""
+def save_banana_analysis(product_id: str, result: dict) -> bool:
+    """Write a browning result to /bananaAnalysis/<id> and mirror the
+    browning figure onto the product so the risk score stays consistent.
+    """
     if not FIREBASE_HOST:
-        return {}
-    resp = requests.get(_detection_url(), timeout=10)
-    return (resp.json() or {}) if resp.ok else {}
+        print("[Firebase] FIREBASE_HOST not set -- skipping write-back.")
+        return False
 
-
-def reset_detection() -> None:
-    """Clear the detection flag after a registration attempt."""
-    if not FIREBASE_HOST:
-        return
-    requests.patch(
-        _detection_url(),
-        json={"newProductDetected": False, "eventType": "none"},
-        timeout=10,
-    )
+    payload = {"productId": product_id, "updatedAt": int(time.time()), **result}
+    resp = requests.put(_node_url(f"bananaAnalysis/{product_id}"),
+                        json=payload, timeout=10)
+    requests.patch(_node_url(f"products/{product_id}"), json={
+        "browningRatio": result["totalBrowningPercentage"] / 100.0,
+        "visualStatus": result["visualStatus"],
+        "updatedAt": int(time.time()),
+    }, timeout=10)
+    if resp.ok:
+        print(f"[Firebase] saved bananaAnalysis for '{product_id}'.")
+        return True
+    print(f"[Firebase] write failed: {resp.status_code} {resp.text}")
+    return False
 
 
 def save_product(product: dict) -> bool:
@@ -223,7 +180,6 @@ def save_product(product: dict) -> bool:
     pid = product.get("productId")
     if not pid or not FIREBASE_HOST:
         return False
-    # Compute remainingHours from the expiry date.
     try:
         expiry = datetime.fromisoformat(str(product["expiryDate"]))
         hours = int((expiry - datetime.now()).total_seconds() // 3600)
@@ -231,11 +187,7 @@ def save_product(product: dict) -> bool:
     except Exception:
         pass
     product["updatedAt"] = int(time.time())
-
-    url = f"{FIREBASE_HOST}/devices/{DEVICE_ID}/products/{pid}.json"
-    if FIREBASE_AUTH:
-        url += f"?auth={FIREBASE_AUTH}"
-    resp = requests.put(url, json=product, timeout=10)
+    resp = requests.put(_node_url(f"products/{pid}"), json=product, timeout=10)
     return resp.ok
 
 
@@ -251,31 +203,7 @@ def register_product_from_camera() -> dict:
         return {"ok": False, "error": "QR content is not valid JSON"}
     if not isinstance(product, dict) or not product.get("productId"):
         return {"ok": False, "error": "QR JSON missing productId"}
-
-    saved = save_product(product)
-    reset_detection()
-    return {"ok": saved, "product": product}
-
-
-def auto_register_loop(interval: float = 3.0) -> None:
-    """Poll /detection and auto-register whenever newProductDetected is true."""
-    print(f"[Auto] watching /detection every {interval}s (Ctrl+C to stop)")
-    while True:
-        try:
-            detection = get_detection()
-            if detection.get("newProductDetected") and \
-                    detection.get("eventType") == "added":
-                print("[Auto] product detected -> registering...")
-                result = register_product_from_camera()
-                if result.get("ok"):
-                    name = result["product"].get("name", "?")
-                    print(f"[Auto] registered: {name}")
-                else:
-                    print(f"[Auto] failed: {result.get('error')}")
-                    reset_detection()
-        except Exception as exc:
-            print(f"[Auto] error: {exc}")
-        time.sleep(interval)
+    return {"ok": save_product(product), "product": product}
 
 
 # --------------------------------------------------------------------------
@@ -291,7 +219,7 @@ def health():
 
 @app.post("/analyze")
 def analyze_endpoint():
-    """Analyze the current camera image for a given banana product.
+    """Analyze the current camera image for banana browning.
 
     JSON body: {"productId": "banana_001"}  (productId optional)
     Query param ?write=false disables the Firebase write-back.
@@ -302,28 +230,18 @@ def analyze_endpoint():
 
     try:
         image = fetch_capture_image()
-    except Exception as exc:  # network / camera error
+    except Exception as exc:
         return jsonify({"error": f"could not fetch image: {exc}"}), 502
 
     result = analyze_browning(image)
-
-    written = False
-    if write_back:
-        written = update_product_in_firebase(product_id, result)
-
-    return jsonify({
-        "productId": product_id,
-        "firebaseUpdated": written,
-        **result,
-    })
+    written = save_banana_analysis(product_id, result) if write_back else False
+    return jsonify({"productId": product_id, "firebaseUpdated": written,
+                    **result})
 
 
-@app.post("/auto-register")
-def auto_register_endpoint():
-    """Capture the camera image, decode its QR code and register the product.
-
-    This is the backend side of the automatic registration flow.
-    """
+@app.post("/register")
+def register_endpoint():
+    """Capture the camera image, decode its QR code and register the product."""
     try:
         result = register_product_from_camera()
     except Exception as exc:
@@ -336,18 +254,16 @@ def auto_register_endpoint():
 # --------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(
-        description="Smart Fridge banana browning analysis service.")
+        description="Smart Fridge image analysis service (optional).")
     parser.add_argument("--file", help="analyze a local image instead of "
                                        "fetching from the camera")
     parser.add_argument("--product", default="banana_001",
-                        help="product id for Firebase write-back")
+                        help="product id for the banana analysis write-back")
     parser.add_argument("--no-write", action="store_true",
                         help="do not write the result to Firebase")
     parser.add_argument("--serve", action="store_true",
                         help="run the Flask HTTP server")
-    parser.add_argument("--auto", action="store_true",
-                        help="poll /detection and auto-register products")
-    parser.add_argument("--register-once", action="store_true",
+    parser.add_argument("--register", action="store_true",
                         help="capture once, decode the QR and register it")
     args = parser.parse_args()
 
@@ -356,15 +272,11 @@ def main():
         app.run(host="0.0.0.0", port=HTTP_PORT)
         return
 
-    if args.auto:
-        auto_register_loop()
-        return
-
-    if args.register_once:
+    if args.register:
         print(register_product_from_camera())
         return
 
-    # One-shot CLI analysis.
+    # One-shot banana browning analysis.
     if args.file:
         print(f"[CLI] analyzing local file: {args.file}")
         image = load_image_file(args.file)
@@ -378,7 +290,7 @@ def main():
         print(f"  {k}: {v}")
 
     if not args.no_write:
-        update_product_in_firebase(args.product, result)
+        save_banana_analysis(args.product, result)
 
 
 if __name__ == "__main__":

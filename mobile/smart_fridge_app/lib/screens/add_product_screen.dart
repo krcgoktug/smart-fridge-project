@@ -161,8 +161,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   color: const Color(0xFFEFF4EF),
                   padding: const EdgeInsets.all(12),
                   child: const Text(
-                    'Products normally register automatically when placed '
-                    'on the scale. Use this manual scan only as a backup.',
+                    'This scans a QR code with the phone camera. The main '
+                    'flow is "Scan QR from Camera" on the Camera screen.',
                     style: TextStyle(fontSize: 12, color: Colors.black87),
                   ),
                 ),

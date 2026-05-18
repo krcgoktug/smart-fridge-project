@@ -102,7 +102,19 @@ class _DetailBody extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
-                  StatusBadge(status: breakdown.status),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: <Widget>[
+                      StatusBadge(
+                        status: product.expiryStatus(),
+                        compact: true,
+                        color: StatusColors.forExpiryStatus(
+                            product.expiryStatus()),
+                      ),
+                      StatusBadge(status: breakdown.status, compact: true),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                   Text(product.remainingTimeLabel(),
                       style: const TextStyle(color: Colors.black54)),
@@ -111,7 +123,32 @@ class _DetailBody extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
+        if (product.expiryNeedsWarning)
+          Card(
+            color: const Color(0xFFFDECEA),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.warning_amber_rounded,
+                      color: StatusColors.spoilage),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      product.expiryStatus() == 'Expired'
+                          ? 'This product has passed its expiry date.'
+                          : 'Expiry date is approaching — consume soon.',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 6),
 
         _Section(
           title: 'QR metadata',

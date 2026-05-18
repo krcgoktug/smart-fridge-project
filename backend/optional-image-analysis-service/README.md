@@ -1,27 +1,33 @@
 # Optional Image Analysis Service
 
-A small Python service that performs **banana browning detection** with
+A small Python service that mirrors the app's two camera-driven features with
 lightweight image processing — **no machine learning**.
 
-It is **optional**: the Flutter app can do the same analysis on the phone.
-This service exists so the work can run on a laptop and write results back to
-Firebase, which is convenient for the demo.
+It is **optional**: the Flutter app does all of this on the phone. This
+service exists so the work can run on a laptop and write results back to
+Firebase, which is convenient for the demo. There is no load-cell dependency.
 
 ## What it does
 
-1. Fetches the latest JPEG from the ESP32-CAM `/capture` URL.
-2. Detects brown/dark pixels using HSV + RGB thresholds.
-3. Computes `browningRatio` and maps it to a `visualStatus`:
+**Banana browning analysis** — pixel-based, RGB thresholds:
 
-   | browningRatio | visualStatus |
-   |---------------|--------------|
-   | `< 0.10` | Fresh |
-   | `0.10 - 0.25` | Slight Browning |
-   | `0.25 - 0.50` | Browning Detected |
-   | `>= 0.50` | Consume Soon |
+1. Fetch the latest JPEG from the ESP32-CAM `/capture` URL.
+2. Classify each pixel as banana flesh, a brown spot, or a dark spot.
+3. Compute the percentages and map the total to a `visualStatus`:
 
-4. Optionally PATCHes `browningRatio` + `visualStatus` into
-   `/devices/<DEVICE_ID>/products/<productId>` in Firebase.
+   | totalBrowningPercentage | visualStatus |
+   |-------------------------|--------------|
+   | `0 - 10 %` | Fresh |
+   | `10 - 25 %` | Slight Browning |
+   | `25 - 50 %` | Browning Detected |
+   | `>= 50 %` | Consume Soon |
+
+4. Save `{brownSpotPercentage, darkSpotPercentage, totalBrowningPercentage,
+   visualStatus}` under `/devices/<id>/bananaAnalysis/<productId>`.
+
+**QR product registration** — fetch the camera image, decode the QR code with
+OpenCV (`cv2.QRCodeDetector`), and save the product under
+`/devices/<id>/products/<productId>`.
 
 ## Setup
 
@@ -38,16 +44,17 @@ analyzer with no write-back.
 
 ## Usage
 
-### One-shot CLI (fetch from the camera)
+### Banana analysis — one-shot CLI
 
 ```bash
-python app.py --product banana_001
+python app.py --product banana_001            # fetch from the camera
+python app.py --file sample_banana.png --no-write   # analyze a local image
 ```
 
-### Analyze a local image (offline / demo fallback)
+### QR product registration
 
 ```bash
-python app.py --file sample_banana.jpg --no-write
+python app.py --register     # capture once, decode the QR, save the product
 ```
 
 ### HTTP server mode
@@ -56,45 +63,27 @@ python app.py --file sample_banana.jpg --no-write
 python app.py --serve
 ```
 
-Then call it:
-
 ```bash
-# health check
 curl http://localhost:5000/health
 
-# analyze the current camera frame for a product
+# banana analysis for a product
 curl -X POST http://localhost:5000/analyze \
      -H "Content-Type: application/json" \
      -d "{\"productId\":\"banana_001\"}"
+
+# capture + QR decode + register a product
+curl -X POST http://localhost:5000/register
 ```
 
-Add `?write=false` to the `/analyze` URL to skip the Firebase write-back.
-
-## Automatic product registration (optional)
-
-The backend can also drive the **automatic registration** flow — the same job
-the Flutter app does. When the ESP32 DevKit reports a weight event on
-`/detection`, it fetches the ESP32-CAM image, decodes the QR code (OpenCV,
-`cv2.QRCodeDetector`), saves the product, and resets the detection flag.
-
-```bash
-# Watch /detection and auto-register products as they are placed
-python app.py --auto
-
-# Capture once, decode the QR and register the product immediately
-python app.py --register-once
-```
-
-Use the app's listener **or** the backend `--auto` loop — not both at once,
-or they will race to register the same product.
+Add `?write=false` to `/analyze` to skip the Firebase write-back.
 
 ## Endpoints
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/health` | Liveness check + configured capture URL |
-| POST | `/analyze` | Analyze the current camera image for a product |
-| POST | `/auto-register` | Capture, decode the QR code and register the product |
+| POST | `/analyze` | Banana browning analysis of the current camera image |
+| POST | `/register` | Capture, decode the QR code and register the product |
 
 ## Notes
 
