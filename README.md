@@ -12,11 +12,13 @@ goes bad.
 
 ## What it does
 
-- Reads environmental sensors (temperature, humidity, gas, weight) inside the box.
-- **Registers products automatically**: placing an item on the load-cell
-  platform triggers a weight event, the ESP32-CAM captures its QR code, and
-  the product is added with no button press (manual scan stays as a backup).
-- Captures product images with an ESP32-CAM for **banana browning detection**.
+- Reads environmental sensors (temperature, humidity, gas, weight) inside the
+  box with an **optional, independent** ESP32 DevKit board.
+- **Registers products from QR codes**: the user taps *"Scan QR from Camera"*,
+  the app captures an image from the ESP32-CAM and decodes the product QR.
+- Runs **pixel-based banana browning analysis** on ESP32-CAM images.
+- Keeps working even when the ESP32 sensor board is offline — it just shows
+  *"ESP32 not connected"* and the QR / camera / banana features still run.
 - Combines all signals into a **risk score (0-100)** and a status:
   - `Fresh` (0-39)
   - `Consume Soon` (40-69)
@@ -39,26 +41,30 @@ egg box, packaged food. Every product carries a QR code sticker.
 ```
 +---------------------+        +----------------------+
 |  ESP32 DevKit V1    |        |  ESP32-CAM AI Thinker|
-|  - MQ135 gas        |        |  - OV2640 camera     |
-|  - DHT11 temp/hum   |        |  - CameraWebServer   |
-|  - HX711 + 4 cells  |        |  - /stream, /capture |
-|  - risk score calc  |        +----------+-----------+
-+----------+----------+                   |
-           |  JSON over Wi-Fi             |  image URLs
+|  (optional sensor   |        |  (independent camera)|
+|   node)             |        |  - OV2640 camera     |
+|  - MQ135 gas        |        |  - CameraWebServer   |
+|  - DHT11 temp/hum   |        |  - /stream, /capture |
+|  - HX711 (optional) |        +----------+-----------+
+|  - risk score calc  |                   |
++----------+----------+                   |  image (QR + banana)
+           |  JSON over Wi-Fi             |
            v                              v
    +----------------------------------------------+
    |        Firebase Realtime Database            |
-   |  /devices/fridge_01/{sensors,camera,         |
-   |                      products,alerts}        |
+   |  /devices/fridge_01/{sensors,camera,products,|
+   |                      bananaAnalysis,alerts}  |
    +-----------------------+----------------------+
                            |
                   +--------v---------+
-                  |  Flutter app     |
-                  |  + optional      |
-                  |  Python image    |
-                  |  analysis svc    |
+                  |  Flutter app     |  QR decode + banana
+                  |  + optional      |  analysis happen here
+                  |  Python backend  |  (not on the camera)
                   +------------------+
 ```
+
+The two ESP32 boards are independent: the camera never waits for a load-cell
+event, and the app works even if the sensor board is absent.
 
 Full details: [docs/architecture.md](docs/architecture.md).
 

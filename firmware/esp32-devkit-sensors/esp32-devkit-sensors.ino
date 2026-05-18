@@ -8,23 +8,16 @@
  *    - MQ135   : gas / air quality (analog) (GPIO 34)
  *    - HX711   : weight from 4 load cells   (DT GPIO 16, SCK GPIO 17)
  *
- *  TWO JOBS:
- *  1. Every UPLOAD_INTERVAL it uploads sensor data + a simplified
- *     sensor-only risk score to:   /devices/<DEVICE_ID>/sensors
+ *  Uploads the readings + a simplified sensor-only risk score every
+ *  UPLOAD_INTERVAL to:   /devices/<DEVICE_ID>/sensors
  *
- *  2. AUTOMATIC PRODUCT DETECTION (the primary registration trigger):
- *     It continuously watches the load-cell weight. When the weight
- *     changes by >= WEIGHT_EVENT_THRESHOLD grams and then stays stable
- *     for WEIGHT_STABLE_MS, it writes an event to:
- *           /devices/<DEVICE_ID>/detection
- *       - weight INCREASED -> { newProductDetected: true,  eventType: "added" }
- *       - weight DECREASED -> { newProductDetected: false, eventType: "removed" }
- *
- *     The Flutter app (or backend) listens for newProductDetected == true,
- *     calls the ESP32-CAM /capture endpoint, decodes the QR code, saves the
- *     product, and then resets newProductDetected back to false.
- *
- *     This board does NOT decode QR codes and does NOT take pictures.
+ *  IMPORTANT - this board is an INDEPENDENT, OPTIONAL sensor node:
+ *    - It does NOT trigger the camera and does NOT drive product
+ *      registration. The load cells are just one more sensor reading.
+ *    - If this board is offline the rest of the system keeps working:
+ *      the app detects stale `updatedAt` and shows "ESP32 not connected".
+ *    - `updatedAt` is a real Unix timestamp (NTP) so the app can reliably
+ *      decide whether the sensor data is fresh.
  *
  *  ------------------------------------------------------------------------
  *  REQUIRED LIBRARIES (Arduino Library Manager):
@@ -45,6 +38,7 @@
 #include <ArduinoJson.h>
 #include <DHT.h>
 #include <HX711.h>
+#include <time.h>
 
 #include "secrets.h"   // copy from secrets.example.h (git-ignored)
 
@@ -59,18 +53,8 @@
 // HX711 calibration: raw_value / KNOWN_GRAMS. Calibrate with a known weight.
 #define HX711_CALIBRATION_FACTOR  420.0f
 
-// Sensor upload cadence.
+// How often to read sensors and upload (milliseconds).
 #define UPLOAD_INTERVAL_MS        10000UL
-
-// --- Automatic product detection (weight-change trigger) ---
-// A change is only treated as a product event when it is at least this big.
-#define WEIGHT_EVENT_THRESHOLD    50.0f    // grams
-// Readings within this band of each other count as "the same" (noise).
-#define WEIGHT_NOISE_BAND         20.0f    // grams
-// The weight must hold steady this long before the event is accepted.
-#define WEIGHT_STABLE_MS          4000UL   // 3-5 s recommended
-// How often the weight is sampled for the detection logic.
-#define WEIGHT_CHECK_INTERVAL_MS  1000UL
 
 // Ideal cold-storage ranges (used by the sensor-side risk estimate).
 #define TEMP_IDEAL_MIN   2.0f
@@ -82,13 +66,8 @@
 DHT dht(DHT_PIN, DHT_TYPE);
 HX711 scale;
 
-unsigned long lastUpload      = 0;
-unsigned long lastWeightCheck = 0;
-
-// Weight-change detection state.
-float lastStableWeight   = 0.0f;  // last accepted stable weight level
-float candidateWeight    = 0.0f;  // current candidate level being timed
-unsigned long candidateSince = 0; // when the candidate level was first seen
+unsigned long lastUpload = 0;
+bool hx711Available = false;   // the system still works without load cells
 
 // ==========================================================================
 //  Wi-Fi
@@ -117,9 +96,16 @@ void connectWiFi() {
   }
 }
 
+// Real Unix time from NTP. Falls back to uptime seconds before the first
+// sync so `updatedAt` is never zero.
+unsigned long nowEpoch() {
+  time_t t = time(nullptr);
+  if (t < 100000) return millis() / 1000;   // NTP not synced yet
+  return (unsigned long)t;
+}
+
 // ==========================================================================
 //  Generic Firebase Realtime Database REST PATCH helper
-//  PATCH merges the given JSON into <path> without deleting siblings.
 // ==========================================================================
 bool firebasePatch(const String& path, const String& body) {
   if (WiFi.status() != WL_CONNECTED) {
@@ -139,7 +125,6 @@ bool firebasePatch(const String& path, const String& body) {
   }
   http.addHeader("Content-Type", "application/json");
 
-  // Arduino HTTPClient has no PATCH helper; sendRequest performs it.
   int code = http.sendRequest("PATCH", (uint8_t*)body.c_str(), body.length());
   bool ok = (code == HTTP_CODE_OK);
   if (!ok) {
@@ -184,75 +169,12 @@ int readGas() {
   return (int)(sum / samples);
 }
 
-// Weight in grams. Returns >= 0.
+// Weight in grams. Returns 0 when no HX711 is connected (optional sensor).
 float readWeight() {
-  if (!scale.is_ready()) {
-    Serial.println("[HX711] not ready.");
-    return lastStableWeight;          // fall back to last known good value
-  }
-  float w = scale.get_units(10);      // average of 10 reads
-  if (w < 0) w = 0;                   // clamp small negative drift
+  if (!hx711Available || !scale.is_ready()) return 0.0f;
+  float w = scale.get_units(10);            // average of 10 reads
+  if (w < 0) w = 0;                         // clamp small negative drift
   return w;
-}
-
-// ==========================================================================
-//  AUTOMATIC PRODUCT DETECTION
-//  Watches the load-cell weight and, on a stable significant change, writes
-//  an event to /devices/<DEVICE_ID>/detection.
-// ==========================================================================
-void writeDetectionEvent(const char* eventType, int weightDelta,
-                         int stableWeight, bool newProductDetected) {
-  StaticJsonDocument<192> doc;
-  doc["newProductDetected"] = newProductDetected;
-  doc["eventType"]          = eventType;          // "added" | "removed"
-  doc["weightDelta"]        = weightDelta;        // grams, signed
-  doc["stableWeight"]       = stableWeight;       // grams
-  doc["updatedAt"]          = (unsigned long)(millis() / 1000);
-
-  String body;
-  serializeJson(doc, body);
-
-  String path = String("/devices/") + DEVICE_ID + "/detection";
-  if (firebasePatch(path, body)) {
-    Serial.printf("[Detect] event '%s' (delta %d g) sent.\n",
-                  eventType, weightDelta);
-  }
-}
-
-void checkWeightChange() {
-  float w = readWeight();
-
-  // If the reading moved away from the current candidate, start a new
-  // candidate level and restart the stability timer.
-  if (fabs(w - candidateWeight) > WEIGHT_NOISE_BAND) {
-    candidateWeight = w;
-    candidateSince  = millis();
-    return;
-  }
-
-  // Reading is within the noise band of the candidate. Wait until it has
-  // held steady long enough to be considered "stable".
-  if (millis() - candidateSince < WEIGHT_STABLE_MS) return;
-
-  // Stable. Compare against the last accepted stable level.
-  float delta = candidateWeight - lastStableWeight;
-  if (fabs(delta) < WEIGHT_EVENT_THRESHOLD) return;   // change too small
-
-  if (delta > 0) {
-    // Weight increased -> a product was placed. Ask the app to capture
-    // an image and register it.
-    Serial.printf("[Weight] product ADDED  (+%.0f g)\n", delta);
-    writeDetectionEvent("added", (int)delta, (int)candidateWeight, true);
-  } else {
-    // Weight decreased -> a product was removed / consumed. No camera
-    // capture needed, so newProductDetected stays false.
-    Serial.printf("[Weight] product REMOVED (%.0f g)\n", delta);
-    writeDetectionEvent("removed", (int)delta, (int)candidateWeight, false);
-  }
-
-  // Accept this as the new baseline so we do not fire again until the
-  // weight settles at yet another level.
-  lastStableWeight = candidateWeight;
 }
 
 // ==========================================================================
@@ -306,9 +228,10 @@ bool uploadSensors(float temp, float hum, int gas, float weight,
   doc["humidity"]    = isnan(hum)  ? 0 : hum;
   doc["gasValue"]    = gas;
   doc["weight"]      = (int)weight;
+  doc["hasLoadCell"] = hx711Available;
   doc["riskScore"]   = riskScore;
   doc["status"]      = status;
-  doc["updatedAt"]   = (unsigned long)(millis() / 1000);
+  doc["updatedAt"]   = nowEpoch();           // real Unix time (NTP)
 
   String body;
   serializeJson(doc, body);
@@ -334,19 +257,27 @@ void setup() {
 
   dht.begin();
 
+  // HX711 is OPTIONAL. If it never becomes ready, weight is reported as 0
+  // and the rest of the system carries on normally.
   scale.begin(HX711_DT_PIN, HX711_SCK_PIN);
-  scale.set_scale(HX711_CALIBRATION_FACTOR);
-  scale.tare();                  // zero the empty box at startup
-  Serial.println("[HX711] tared (empty box = 0 g).");
-
-  // Detection baseline starts at the empty-box weight (0 g).
-  lastStableWeight = 0.0f;
-  candidateWeight  = 0.0f;
-  candidateSince   = millis();
+  unsigned long hxStart = millis();
+  while (!scale.is_ready() && millis() - hxStart < 2000UL) {
+    delay(50);
+  }
+  hx711Available = scale.is_ready();
+  if (hx711Available) {
+    scale.set_scale(HX711_CALIBRATION_FACTOR);
+    scale.tare();
+    Serial.println("[HX711] connected and tared (empty box = 0 g).");
+  } else {
+    Serial.println("[HX711] not detected -- weight reported as 0 g.");
+  }
 
   connectWiFi();
-  Serial.println("[Setup] done. Place a product on the scale to register it.");
-  Serial.println("        MQ135 needs ~1-2 min to warm up.");
+
+  // NTP so `updatedAt` is a real timestamp (UTC).
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  Serial.println("[Setup] done. MQ135 needs ~1-2 min to warm up.");
 }
 
 // ==========================================================================
@@ -358,21 +289,13 @@ void loop() {
   }
 
   unsigned long now = millis();
-
-  // --- Automatic product detection (runs frequently) ---
-  if (now - lastWeightCheck >= WEIGHT_CHECK_INTERVAL_MS) {
-    lastWeightCheck = now;
-    checkWeightChange();
-  }
-
-  // --- Periodic sensor upload ---
   if (now - lastUpload >= UPLOAD_INTERVAL_MS) {
     lastUpload = now;
 
     float temp   = readTemperature();
     float hum    = readHumidity();
     int   gas    = readGas();
-    float weight = candidateWeight;          // latest known weight
+    float weight = readWeight();
 
     int   risk   = computeSensorRisk(temp, hum, gas);
     const char* status = statusFromScore(risk);

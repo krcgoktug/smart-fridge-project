@@ -24,20 +24,23 @@ not to predict exact spoilage time.
 
 ## 2. Hardware components
 
-### 2.1 ESP32 DevKit V1 — Sensor node
+### 2.1 ESP32 DevKit V1 — Sensor node (optional & independent)
 
 | Responsibility | Detail |
 |----------------|--------|
 | Gas sensing | MQ135 analog output -> ESP32 ADC |
 | Temp / humidity | DHT11 digital sensor |
-| Weight | HX711 24-bit ADC with 4 load cells (Wheatstone bridge) |
+| Weight | HX711 24-bit ADC with 4 load cells (optional) |
 | Risk computation | Sensor-based partial risk score |
-| Weight-change detection | Detects products added/removed |
-| Cloud upload | Pushes JSON to Firebase Realtime Database |
+| Cloud upload | Pushes JSON (with an NTP timestamp) to Firebase |
 
-The sensor node owns `/devices/fridge_01/sensors`.
+The sensor node owns `/devices/fridge_01/sensors`. It is **optional**: it does
+**not** trigger the camera and does **not** drive product registration. If it
+is offline the rest of the system keeps working — the app sees a stale
+`updatedAt` (older than 60 s) and shows *"ESP32 not connected"*. The HX711
+itself is optional; without it the weight is reported as `0 g`.
 
-### 2.2 ESP32-CAM AI Thinker — Camera node
+### 2.2 ESP32-CAM AI Thinker — Camera node (independent)
 
 | Responsibility | Detail |
 |----------------|--------|
@@ -45,6 +48,11 @@ The sensor node owns `/devices/fridge_01/sensors`.
 | Web server | Standard `CameraWebServer` example |
 | Endpoints | `/` (stream UI), `/capture` (single JPEG) |
 | Cloud | Optionally writes its `streamUrl` / `captureUrl` to Firebase |
+
+The camera node is **completely independent of the load cells** — it never
+waits for a weight event. Its only jobs are (a) provide images so the app can
+**read product QR codes**, and (b) provide images for **banana browning
+analysis**.
 
 **The camera node does NOT run QR decoding, AI inference, or image
 processing.** It only serves images. All decoding/analysis happens in the
@@ -66,11 +74,11 @@ libraries for RTDB are mature and lightweight.
 ### Database tree
 
 ```
-/devices/fridge_01/sensors     <- written by ESP32 DevKit
-/devices/fridge_01/camera      <- written by ESP32-CAM (or app)
-/devices/fridge_01/detection   <- written by ESP32 DevKit (weight trigger)
-/devices/fridge_01/products    <- written by app/backend (auto registration)
-/devices/fridge_01/alerts      <- written by app / backend
+/devices/fridge_01/sensors          <- written by the ESP32 DevKit
+/devices/fridge_01/camera           <- written by the ESP32-CAM (or app)
+/devices/fridge_01/products         <- written by app/backend (QR scan)
+/devices/fridge_01/bananaAnalysis   <- written by app/backend (banana analysis)
+/devices/fridge_01/alerts           <- written by app / backend
 ```
 
 The full schema with example values lives in
@@ -82,58 +90,78 @@ The full schema with example values lives in
 |------|--------|--------|
 | `sensors` | ESP32 DevKit | App, backend |
 | `camera` | ESP32-CAM / app | App, backend |
-| `detection` | ESP32 DevKit (sets), app/backend (resets) | App, backend |
-| `products` | App / backend (auto registration) | App |
+| `products` | App / backend (QR scan) | App |
+| `bananaAnalysis` | App / backend (banana analysis) | App |
 | `alerts` | App, backend | App |
 
 ---
 
-## 4. Automatic product registration
+## 4. Product registration (QR, user-triggered)
 
-Product registration is **automatic** and triggered by the load cells — the
-user does **not** have to press an "Add Product" button. (A manual QR scan
-remains available only as a backup.)
+Product registration is **user-triggered** — it is **not** driven by the load
+cells. The load cells are just an optional sensor; placing something on them
+does **not** register a product.
 
 ### Workflow
 
 ```
-1. User places a product on the load-cell platform.
-2. ESP32 DevKit detects a stable weight INCREASE (see below).
-3. ESP32 DevKit writes /detection:
-       { newProductDetected: true, eventType: "added",
-         weightDelta, stableWeight, updatedAt }
-4. The app (or backend) is listening on /detection.
-5. When newProductDetected == true it calls the ESP32-CAM /capture URL.
-6. The captured image is analyzed for a QR code (on the app / backend).
-7. The QR-code JSON is parsed into product metadata.
-8. The product is saved under /devices/fridge_01/products/{productId}.
-9. The app shows the new product automatically (it already streams /products).
-10. The app/backend resets /detection/newProductDetected back to false.
+1. User taps "Scan QR from Camera" in the app.
+2. The app captures a still image:
+     - Hardware mode: GET the ESP32-CAM /capture URL.
+     - Demo mode:      use a bundled sample QR image.
+3. The app decodes the QR code from that image (on-device, pure Dart).
+4. The QR JSON is parsed into product metadata.
+5. The user confirms, and the product is saved under
+   /devices/fridge_01/products/{productId}.
+6. The app shows the product with its expiry status and warnings.
 ```
 
-The **ESP32-CAM only serves the image** via `/capture`. It never decodes QR
-codes — decoding happens on the app or the Python backend.
+The QR payload is our own prepared product JSON:
 
-### Weight-change detection
+```json
+{
+  "productId": "milk_001",
+  "name": "Milk",
+  "category": "Dairy",
+  "expiryDate": "2026-05-25",
+  "addedDate": "2026-05-18",
+  "brand": "Example Brand",
+  "expectedWeight": 1000
+}
+```
 
-The ESP32 DevKit samples the HX711 weight roughly once per second and runs a
-small stability state machine:
+The **ESP32-CAM only serves the image**; QR decoding happens in the app (or
+the Python backend), never on the camera. A phone-camera live scan is also
+available as a backup.
 
-| Parameter | Value | Meaning |
-|-----------|-------|---------|
-| `WEIGHT_EVENT_THRESHOLD` | 50 g | minimum change treated as an event |
-| `WEIGHT_NOISE_BAND` | 20 g | smaller fluctuations are ignored |
-| `WEIGHT_STABLE_MS` | 4000 ms | weight must hold steady this long |
+### Expiry status
 
-- The weight must settle (stay within the noise band) for `WEIGHT_STABLE_MS`
-  before a change is accepted — this rejects hands, vibration and noise.
-- A stable **increase** of >= 50 g => product **added** =>
-  `newProductDetected: true`, `eventType: "added"`.
-- A stable **decrease** of >= 50 g => product **removed / consumed** =>
-  `eventType: "removed"` (`newProductDetected` stays `false`; no camera
-  capture is needed for a removal).
-- After firing, the new stable level becomes the baseline, so the event does
-  not repeat until the weight settles at yet another level.
+From `expiryDate` the app derives an expiry-based status shown on every
+product:
+
+| Remaining time | Status |
+|----------------|--------|
+| more than 3 days | `Fresh` |
+| 3 days or less (and not expired) | `Expiring Soon` |
+| past the expiry date | `Expired` |
+
+When a product is `Expiring Soon` or `Expired` the app raises a warning.
+
+---
+
+## 4a. Device offline behavior
+
+Every part of the system is independent, so a missing device does not break
+the others:
+
+- **ESP32 DevKit offline** — `/sensors/updatedAt` (a real NTP timestamp) goes
+  stale. After 60 s the app marks the board offline and shows
+  *"ESP32 not connected / sensor data unavailable"*. QR scanning, the camera
+  and banana analysis all keep working.
+- **ESP32-CAM offline / unreachable** — QR scan and banana analysis report a
+  capture error; the user can retry or use Demo mode / the phone-camera scan.
+- The app itself always runs: in **Demo mode** it uses bundled sample data and
+  needs no hardware at all.
 
 ---
 
@@ -163,28 +191,51 @@ See [../qr-samples/qr-generation-guide.md](../qr-samples/qr-generation-guide.md)
 
 ---
 
-## 6. Banana browning detection
+## 6. Banana browning analysis
 
-Lightweight image processing only — **no heavy ML**.
+Pixel-based image processing only — **no AI / ML**. It runs in the app (or the
+Python backend) and is triggered by the user pressing **"Analyze Banana"**.
 
-Steps (mobile app or Python backend):
+Steps:
 
-1. Fetch the latest JPEG from the ESP32-CAM `/capture` URL.
-2. Convert to HSV; also keep RGB.
-3. Count "brown/dark" pixels using HSV + RGB thresholds.
-4. `browningRatio = brownPixels / totalAnalyzedPixels`.
-5. Map ratio to `visualStatus`:
+1. Capture a still image (ESP32-CAM `/capture`, or a bundled sample image in
+   Demo mode).
+2. For every pixel, classify it with simple RGB / HSV thresholds:
+   - **banana pixel** — yellow, brown or dark (not background),
+   - **brown spot** — a brownish overripe pixel,
+   - **dark spot** — a very dark / black pixel.
+3. Compute three percentages relative to the banana pixels:
 
-| browningRatio | visualStatus |
-|---------------|--------------|
-| `< 0.10` | Fresh |
-| `0.10 - 0.25` | Slight Browning |
-| `0.25 - 0.50` | Browning Detected |
-| `>= 0.50` | Consume Soon |
+   ```
+   brownSpotPercentage     = brownPixels / bananaPixels * 100
+   darkSpotPercentage      = darkPixels  / bananaPixels * 100
+   totalBrowningPercentage = brownSpotPercentage + darkSpotPercentage
+   ```
 
-6. Write `browningRatio` + `visualStatus` back to the product.
+4. Map `totalBrowningPercentage` to `visualStatus`:
 
-The default implementation is the Python backend
+| totalBrowningPercentage | visualStatus |
+|-------------------------|--------------|
+| `0 - 10 %` | Fresh |
+| `10 - 25 %` | Slight Browning |
+| `25 - 50 %` | Browning Detected |
+| `>= 50 %` | Consume Soon |
+
+5. Save the result under `/devices/fridge_01/bananaAnalysis/{productId}`:
+
+```json
+{
+  "productId": "banana_001",
+  "brownSpotPercentage": 18.4,
+  "darkSpotPercentage": 6.2,
+  "totalBrowningPercentage": 24.6,
+  "visualStatus": "Slight Browning"
+}
+```
+
+The app shows the latest banana image, the percentages, the visual status and
+a warning — *"Banana browning detected. Consume soon."* — when browning is
+significant. The same logic is also available in the Python backend
 ([../backend/optional-image-analysis-service](../backend/optional-image-analysis-service)).
 
 ---

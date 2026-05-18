@@ -8,26 +8,32 @@
         "createdAt": 1710000000
       },
       "sensors": {
+        "_comment": "Written by the optional ESP32 DevKit. updatedAt is a real Unix time (NTP); the app marks the board offline if it is older than 60 s.",
         "temperature": 5.8,
         "humidity": 72,
         "gasValue": 1350,
         "weight": 482,
+        "hasLoadCell": true,
         "riskScore": 64,
         "status": "Consume Soon",
         "updatedAt": 1710000000
       },
       "camera": {
+        "_comment": "ESP32-CAM endpoints. The camera is independent of the load cells.",
         "streamUrl": "http://172.19.15.112",
         "captureUrl": "http://172.19.15.112/capture",
         "updatedAt": 1710000000
       },
-      "detection": {
-        "_comment": "Written by the ESP32 DevKit when the load-cell weight changes. The app/backend watches newProductDetected and resets it to false after registering the product.",
-        "newProductDetected": false,
-        "eventType": "added",
-        "weightDelta": 152,
-        "stableWeight": 1436,
-        "updatedAt": 1710000000
+      "bananaAnalysis": {
+        "_comment": "Pixel-based banana browning results, keyed by productId. Written by the app or backend after an 'Analyze Banana' run.",
+        "banana_001": {
+          "productId": "banana_001",
+          "brownSpotPercentage": 18.4,
+          "darkSpotPercentage": 6.2,
+          "totalBrowningPercentage": 24.6,
+          "visualStatus": "Slight Browning",
+          "updatedAt": 1710000000
+        }
       },
       "products": {
         "banana_001": {

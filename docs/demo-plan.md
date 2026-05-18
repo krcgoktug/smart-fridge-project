@@ -25,41 +25,40 @@ The Smart Fridge watches the products and warns the user early.
 
 Show the physical box (47 x 72.5 x 36.2 cm) with the two ESP32 boards.
 
-## 2. Sensor node live data (2 min)
+## 2. Sensor node + offline behavior (2 min)
 
 1. Open the **Dashboard** screen.
-2. Point out live temperature, humidity, gas value and total weight.
+2. Point out the **ESP32 Sensor Status** card and live temperature, humidity,
+   gas value and weight.
 3. Briefly breathe near the MQ135 or open an over-ripe item — watch the gas
    value rise and the global risk score react.
-4. Add an item to the box — show the total weight change on the dashboard.
+4. (Optional) Power off the ESP32 DevKit — after ~60 s the card flips to
+   *"ESP32 not connected"*. Stress that QR scanning and the camera still work.
 
-## 3. Automatic product registration (2 min)
+## 3. QR product registration (2 min)
 
-1. Open the **Dashboard** — point out the **Automatic product detection**
-   card ("Listening — place a product on the scale").
-2. Place the banana (with its QR sticker facing the camera) on the load-cell
-   platform.
-3. The ESP32 DevKit detects the stable weight increase and writes a detection
-   event; the app captures the ESP32-CAM image, decodes the QR code, and
-   registers the product — all automatically. Watch the snackbars:
-   "detected → registering → registered".
-4. Switch to **Product List** — the banana appears on its own with category,
-   expiry date, remaining time and a colored status badge.
-5. (Backup) Mention the **Manual Scan (Backup)** button — used only if a QR
-   code cannot be read automatically.
+1. Open the **Camera** screen.
+2. Tap **"Scan QR from Camera"** — the app captures an image from the
+   ESP32-CAM and decodes the product QR code.
+3. Show the parsed product (name, category, expiry date), confirm, and save.
+4. Switch to **Products** — the product appears with its expiry date,
+   remaining days/hours and an expiry status (`Fresh` / `Expiring Soon` /
+   `Expired`).
 
-> Demo without hardware: on the deployed web app, use the
-> **"Simulate product on scale"** button on the Dashboard — it runs the exact
-> same automatic flow with sample data.
+> Demo without hardware: in **Demo mode** the same button uses a bundled
+> sample QR image, so the whole decode-and-register flow still runs.
 
-## 4. Camera + banana browning (2 min)
+## 4. Banana browning analysis (2 min)
 
-1. Open **Camera View** — show the live ESP32-CAM stream of the box interior.
-2. Place the browned banana in front of the camera.
-3. Trigger an analysis (app button or backend run).
-4. Open the banana's **Product Detail** — show `browningRatio` and
-   `visualStatus` updating to "Browning Detected".
-5. Note the per-product risk score going up.
+1. On the **Camera** screen tap **"Analyze Banana"** (or open the
+   **Banana Analysis** screen).
+2. The app captures an image and runs pixel-based browning analysis.
+3. Show the result: `brownSpotPercentage`, `darkSpotPercentage`,
+   `totalBrowningPercentage` and the `visualStatus`.
+4. Point out the warning — *"Banana browning detected. Consume soon."* — when
+   browning is significant.
+
+> Demo without hardware: Demo mode analyzes a bundled sample banana image.
 
 ## 5. Risk score + alerts (1-2 min)
 

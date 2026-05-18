@@ -34,6 +34,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
+#include <time.h>
 #include "esp_camera.h"
 #include "esp_http_server.h"
 
@@ -198,6 +199,13 @@ void connectWiFi() {
   }
 }
 
+// Real Unix time from NTP; falls back to uptime seconds before first sync.
+unsigned long nowEpoch() {
+  time_t t = time(nullptr);
+  if (t < 100000) return millis() / 1000;
+  return (unsigned long)t;
+}
+
 // ==========================================================================
 //  Optional: publish the camera URLs to Firebase
 // ==========================================================================
@@ -212,7 +220,7 @@ void publishCameraUrls() {
   StaticJsonDocument<192> doc;
   doc["streamUrl"]  = streamUrl;
   doc["captureUrl"] = captureUrl;
-  doc["updatedAt"]  = (unsigned long)(millis() / 1000);
+  doc["updatedAt"]  = nowEpoch();
 
   String body;
   serializeJson(doc, body);
@@ -253,6 +261,7 @@ void setup() {
   }
 
   connectWiFi();
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");  // real timestamps
   startCameraServer();
   publishCameraUrls();
 

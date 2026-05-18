@@ -81,14 +81,26 @@ Spoilage Risk (70-100).
 This design is justified for a university project because it is transparent,
 explainable, requires no training data, and runs on constrained hardware.
 
-## 6. Banana browning detection
+## 6. Banana browning analysis
 
-Banana browning is detected with classic image processing rather than machine
-learning. The captured image is converted to HSV and RGB; pixels that fall
-inside brown/dark thresholds are counted; the ratio of brown pixels to analyzed
-pixels becomes `browningRatio`. This is fast, needs no dataset, and runs on a
-phone or a small Python service. The trade-off is sensitivity to lighting,
-which is mitigated by the controlled, enclosed box environment.
+Banana browning is measured with classic pixel-based image processing rather
+than machine learning. A still image from the ESP32-CAM is examined pixel by
+pixel using simple RGB / HSV thresholds, classifying each pixel as a brown
+spot, a dark spot, or ordinary banana / background. The result is three
+figures — `brownSpotPercentage`, `darkSpotPercentage` and their sum
+`totalBrowningPercentage` — which map to a `visualStatus` of Fresh, Slight
+Browning, Browning Detected or Consume Soon. This is fast, needs no dataset,
+and runs on the phone or a small Python service. The analysis is triggered by
+the user ("Analyze Banana"); it does not depend on the load cells. The
+trade-off is sensitivity to lighting, mitigated by the enclosed box.
+
+## 6a. Independent devices and offline behavior
+
+The two ESP32 boards are intentionally independent. The camera never waits for
+a load-cell event, and the sensor board is optional: its readings carry a real
+NTP timestamp, so when it stops reporting the app marks it offline after 60
+seconds and shows "ESP32 not connected" while QR scanning and banana analysis
+continue to work. This makes the system robust for a live demonstration.
 
 ## 7. Implementation summary
 
