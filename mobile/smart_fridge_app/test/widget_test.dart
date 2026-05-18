@@ -1,6 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_fridge_app/models/camera_info.dart';
+import 'package:smart_fridge_app/models/detection_event.dart';
 import 'package:smart_fridge_app/models/product.dart';
 import 'package:smart_fridge_app/models/sensor_data.dart';
+import 'package:smart_fridge_app/services/auto_registration_service.dart';
+import 'package:smart_fridge_app/services/demo_data.dart';
 import 'package:smart_fridge_app/services/risk_service.dart';
 
 void main() {
@@ -76,6 +80,51 @@ void main() {
       expect(b.gasRisk, 0);
       expect(b.visualRisk, 0);
       expect(b.weightRisk, greaterThan(0));
+    });
+  });
+
+  group('Automatic product registration (demo flow)', () {
+    test('simulateProductPlaced raises an addition detection event',
+        () async {
+      final DemoRepository repo = DemoRepository.instance;
+      repo.simulateProductPlaced();
+      final DetectionEvent event = await repo.detectionStream().first;
+      expect(event.newProductDetected, isTrue);
+      expect(event.isAddition, isTrue);
+      expect(event.weightDelta, greaterThan(0));
+    });
+
+    test('AutoRegistrationService registers the detected product', () async {
+      final DemoRepository repo = DemoRepository.instance;
+      final int before = (await repo.productsStream().first).length;
+
+      repo.simulateProductPlaced();
+      final DetectionEvent event = await repo.detectionStream().first;
+
+      final AutoRegistrationResult result =
+          await AutoRegistrationService.register(
+        event: event,
+        camera: CameraInfo(),
+      );
+
+      expect(result.status, AutoRegStatus.success);
+      expect(result.product, isNotNull);
+
+      final int after = (await repo.productsStream().first).length;
+      expect(after, before + 1);
+
+      // The detection flag must be cleared after registration.
+      final DetectionEvent cleared = await repo.detectionStream().first;
+      expect(cleared.newProductDetected, isFalse);
+    });
+
+    test('non-addition events are ignored', () async {
+      final AutoRegistrationResult result =
+          await AutoRegistrationService.register(
+        event: DetectionEvent(eventType: 'removed', weightDelta: -120),
+        camera: CameraInfo(),
+      );
+      expect(result.status, AutoRegStatus.ignored);
     });
   });
 }
