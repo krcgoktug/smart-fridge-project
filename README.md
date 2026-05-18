@@ -62,7 +62,7 @@ build and hardware mode are in
 ```
 smart-fridge-project/
   README.md
-  docs/                       Architecture, schema, QR, banana, camera limits, wiring
+  docs/                       Setup guide, architecture, schema, QR, banana, camera, wiring
   firmware/
     esp32-devkit/             ESP32 DevKit — sensor controller sketch
     esp32-cam/                ESP32-CAM — camera-only sketch
@@ -76,6 +76,11 @@ smart-fridge-project/
 ---
 
 ## Setup
+
+> **New to this? Follow the click-by-click walkthrough:
+> [docs/setup-guide.md](docs/setup-guide.md)** — it covers creating the
+> Firebase database, filling in the config files and flashing both ESP32
+> boards, step by step. The summary below is the short version.
 
 ### 1. Firebase
 
