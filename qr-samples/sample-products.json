@@ -1,14 +1,14 @@
 {
-  "_comment": "Sample QR payloads. Encode ONE object per QR sticker (see qr-generation-guide.md). The backend decodes these from the camera frame.",
+  "_comment": "Sample QR payloads. Encode ONE object per QR sticker (see qr-generation-guide.md). The image analysis service decodes these from the camera frame.",
   "products": [
-    { "product": "Banana", "expiry": "2026-05-22" },
-    { "product": "Apple", "expiry": "2026-06-05" },
-    { "product": "Tomato", "expiry": "2026-05-24" },
-    { "product": "Cucumber", "expiry": "2026-05-23" },
-    { "product": "Milk", "expiry": "2026-05-25" },
-    { "product": "Yogurt", "expiry": "2026-05-28" },
-    { "product": "Cheese", "expiry": "2026-06-15" },
-    { "product": "Eggs", "expiry": "2026-06-01" },
-    { "product": "Packaged Food", "expiry": "2026-09-30" }
+    { "productId": "banana_001", "name": "Banana", "expiryDate": "2026-05-22", "category": "Fruit" },
+    { "productId": "apple_001", "name": "Apple", "expiryDate": "2026-06-05", "category": "Fruit" },
+    { "productId": "tomato_001", "name": "Tomato", "expiryDate": "2026-05-24", "category": "Vegetable" },
+    { "productId": "cucumber_001", "name": "Cucumber", "expiryDate": "2026-05-23", "category": "Vegetable" },
+    { "productId": "milk_001", "name": "Milk", "expiryDate": "2026-05-25", "category": "Dairy" },
+    { "productId": "yogurt_001", "name": "Yogurt", "expiryDate": "2026-05-28", "category": "Dairy" },
+    { "productId": "cheese_001", "name": "Cheese", "expiryDate": "2026-06-15", "category": "Dairy" },
+    { "productId": "eggbox_001", "name": "Egg Box", "expiryDate": "2026-06-01", "category": "Dairy" },
+    { "productId": "packaged_001", "name": "Packaged Food", "expiryDate": "2026-09-30", "category": "Packaged" }
   ]
 }

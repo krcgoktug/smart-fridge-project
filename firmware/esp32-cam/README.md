@@ -42,7 +42,7 @@ Jumper **GPIO 0 -> GND** to enter flash mode.
 
 ## 4. Upload
 
-1. Open `esp32-cam-camera.ino`.
+1. Open `esp32-cam.ino`.
 2. **Tools -> Board -> AI Thinker ESP32-CAM**, **PSRAM: Enabled**.
 3. Connect GPIO 0 to GND, press RESET, select the FTDI port, **Upload**.
 4. Remove the GPIO 0 jumper, press RESET.

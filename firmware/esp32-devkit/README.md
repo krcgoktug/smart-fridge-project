@@ -60,7 +60,7 @@ See [../../docs/wiring.md](../../docs/wiring.md).
 
 ## 5. Upload
 
-1. Open `esp32-devkit-sensors.ino`, select **ESP32 Dev Module** and the port.
+1. Open `esp32-devkit.ino`, select **ESP32 Dev Module** and the port.
 2. **Upload**, then open the **Serial Monitor** at **115200 baud**.
 
 Expected output:
