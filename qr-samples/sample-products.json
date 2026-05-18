@@ -1,14 +1,12 @@
 {
-  "_comment": "Sample QR payloads. Encode ONE object per QR sticker (see qr-generation-guide.md). The image analysis service decodes these from the camera frame.",
+  "_comment": "Sample product QR payloads. Encode ONE object per QR sticker (see qr-generation-guide.md). The app reads these from the ESP32-CAM image.",
   "products": [
-    { "productId": "banana_001", "name": "Banana", "expiryDate": "2026-05-22", "category": "Fruit" },
-    { "productId": "apple_001", "name": "Apple", "expiryDate": "2026-06-05", "category": "Fruit" },
-    { "productId": "tomato_001", "name": "Tomato", "expiryDate": "2026-05-24", "category": "Vegetable" },
-    { "productId": "cucumber_001", "name": "Cucumber", "expiryDate": "2026-05-23", "category": "Vegetable" },
-    { "productId": "milk_001", "name": "Milk", "expiryDate": "2026-05-25", "category": "Dairy" },
-    { "productId": "yogurt_001", "name": "Yogurt", "expiryDate": "2026-05-28", "category": "Dairy" },
-    { "productId": "cheese_001", "name": "Cheese", "expiryDate": "2026-06-15", "category": "Dairy" },
-    { "productId": "eggbox_001", "name": "Egg Box", "expiryDate": "2026-06-01", "category": "Dairy" },
-    { "productId": "packaged_001", "name": "Packaged Food", "expiryDate": "2026-09-30", "category": "Packaged" }
+    { "productId": "banana_001", "name": "Banana", "category": "Fruit", "expiryDate": "2026-05-22", "addedDate": "2026-05-18" },
+    { "productId": "milk_001", "name": "Milk", "category": "Dairy", "expiryDate": "2026-05-25", "addedDate": "2026-05-18" },
+    { "productId": "yogurt_001", "name": "Yogurt", "category": "Dairy", "expiryDate": "2026-05-28", "addedDate": "2026-05-18" },
+    { "productId": "tomato_001", "name": "Tomato", "category": "Vegetable", "expiryDate": "2026-05-24", "addedDate": "2026-05-18" },
+    { "productId": "apple_001", "name": "Apple", "category": "Fruit", "expiryDate": "2026-06-05", "addedDate": "2026-05-18" },
+    { "productId": "eggbox_001", "name": "Egg Box", "category": "Dairy", "expiryDate": "2026-06-01", "addedDate": "2026-05-18" },
+    { "productId": "packaged_001", "name": "Packaged Food", "category": "Packaged", "expiryDate": "2026-09-30", "addedDate": "2026-05-18" }
   ]
 }

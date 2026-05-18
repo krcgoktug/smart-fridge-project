@@ -1,53 +1,40 @@
 # QR Code Generation Guide
 
-Every product carries our **own printed QR sticker**. The QR stores a small
-JSON payload. The **image analysis service** reads it from the camera frame,
-decodes it (OpenCV + pyzbar) and registers the product in Firebase.
+Every product in the box has our own printed QR sticker. The app reads the QR
+code from the ESP32-CAM image and registers the product in Firebase.
 
-There is **no manual product entry** — a product appears in the app only
-because its QR sticker was seen by the camera.
-
----
-
-## 1. QR payload format
+## QR payload
 
 Encode **one product object** per QR code:
 
 ```json
 {
-  "productId": "banana_001",
-  "name": "Banana",
+  "productId": "milk_001",
+  "name": "Milk",
+  "category": "Dairy",
   "expiryDate": "2026-05-25",
-  "category": "Fruit"
+  "addedDate": "2026-05-18"
 }
 ```
 
-| Field | Type | Notes |
-|-------|------|-------|
-| `productId` | string | Stable unique id; also the Firebase node key |
-| `name` | string | Product name shown in the app |
-| `expiryDate` | string | Expiry date, `YYYY-MM-DD` |
-| `category` | string | e.g. Fruit, Vegetable, Dairy, Packaged |
+| Field | Notes |
+|-------|-------|
+| `productId` | Unique id — also the Firebase key |
+| `name` | Display name |
+| `category` | Fruit / Vegetable / Dairy / Packaged / ... |
+| `expiryDate` | `YYYY-MM-DD` |
+| `addedDate` | `YYYY-MM-DD` |
 
-Sample payloads: [sample-products.json](sample-products.json).
+Ready-made payloads: [sample-products.json](sample-products.json).
 
-The service stores the product under `devices/fridge_01/products/<productId>`:
+## How to generate the stickers
 
-```json
-{ "productId": "banana_001", "productName": "Banana", "category": "Fruit",
-  "expiryDate": "2026-05-25", "detectedAt": 1710000000, "source": "qr" }
-```
-
----
-
-## 2. Generating the QR codes
-
-### Option A — Online generator
+### Option A — online generator
 
 1. Open any QR generator that accepts raw **text**.
 2. Paste one minified product JSON object, e.g.
-   `{"productId":"banana_001","name":"Banana","expiryDate":"2026-05-25","category":"Fruit"}`
-3. Download the PNG and print it as a sticker.
+   `{"productId":"milk_001","name":"Milk","category":"Dairy","expiryDate":"2026-05-25","addedDate":"2026-05-18"}`
+3. Download the PNG and print it.
 
 ### Option B — Python (batch)
 
@@ -62,32 +49,20 @@ with open("sample-products.json", encoding="utf-8") as f:
     products = json.load(f)["products"]
 
 for p in products:
-    if p.get("_comment"):
-        continue
-    payload = json.dumps(p, separators=(",", ":"))   # minified
+    payload = json.dumps(p, separators=(",", ":"))
     qrcode.make(payload).save(f"qr_{p['productId']}.png")
     print("wrote", p["productId"])
 ```
 
----
-
-## 3. Printing tips
+## Printing tips
 
 - Print at least **3 × 3 cm**; bigger scans more reliably.
-- Use a matte sticker to avoid glare under the box light.
-- Face the QR code toward the ESP32-CAM.
-- Keep a master sheet of all QR codes as a demo backup.
+- Use a matte sticker to avoid glare from the box light.
+- Stick it on a flat surface facing the ESP32-CAM.
 
----
+## How it is read
 
-## 4. How it is processed
-
-1. The ESP32-CAM streams frames; the service pulls a snapshot each cycle.
-2. The service decodes any QR code in the frame with **OpenCV + pyzbar**.
-3. The JSON payload is parsed and validated (`productId` and `name` must be
-   non-empty).
-4. The product is written to Firebase; the Flutter app shows it with an
-   expiry status (Fresh / Expiring Soon / Expired).
-
-The ESP32-CAM itself never decodes QR codes — it only provides the image.
-Full pipeline: [docs/qr-system.md](../docs/qr-system.md).
+1. On the app's **Camera** screen, tap **Scan QR**.
+2. The app fetches a frame from `http://<camera-ip>/capture`.
+3. It decodes the QR code on-device and writes the product to Firebase.
+4. The product appears on the **Products** screen with its expiry status.

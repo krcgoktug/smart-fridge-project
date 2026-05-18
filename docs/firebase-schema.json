@@ -1,0 +1,33 @@
+{
+  "_comment": "Firebase Realtime Database layout for the Zero Waste Smart Fridge. Recreate this structure or import it. Timestamps are Unix seconds. Alerts are NOT stored - the app derives them live from sensors + products + camera state.",
+  "devices": {
+    "fridge_01": {
+      "sensors": {
+        "_comment": "Written by the ESP32 DevKit every ~5 s. The app shows 'ESP32 Sensor Board Offline' when updatedAt is older than 60 s.",
+        "temperature": 6.4,
+        "humidity": 73,
+        "gasValue": 1350,
+        "weight": 482,
+        "updatedAt": 1710000000
+      },
+      "camera": {
+        "_comment": "Written by the app when the ESP32-CAM IP is saved on the Camera screen, so every team member's app shares the same address.",
+        "localIp": "172.19.15.112",
+        "streamUrl": "http://172.19.15.112/stream",
+        "captureUrl": "http://172.19.15.112/capture",
+        "lastSeenAt": 1710000000
+      },
+      "products": {
+        "_comment": "Written by the app after it scans a product QR code from the camera. The node key is the productId.",
+        "milk_001": {
+          "productId": "milk_001",
+          "name": "Milk",
+          "category": "Dairy",
+          "expiryDate": "2026-05-25",
+          "addedDate": "2026-05-18",
+          "createdAt": 1710000000
+        }
+      }
+    }
+  }
+}

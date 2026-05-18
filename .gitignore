@@ -24,12 +24,6 @@ mobile/smart_fridge_app/android/.gradle/
 mobile/smart_fridge_app/ios/Pods/
 mobile/smart_fridge_app/**/GeneratedPluginRegistrant.*
 
-# ---- Python backend ----
-backend/**/__pycache__/
-backend/**/.venv/
-backend/**/venv/
-*.pyc
-
 # ---- Arduino ----
 firmware/**/build/
 

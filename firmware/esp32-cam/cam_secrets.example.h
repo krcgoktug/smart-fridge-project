@@ -11,7 +11,7 @@
 #ifndef CAM_SECRETS_H
 #define CAM_SECRETS_H
 
-// ---- Wi-Fi (use the SAME network as the backend and the phone) ----
+// ---- Wi-Fi (use the SAME network as the phone running the app) ----
 #define WIFI_SSID      "YOUR_WIFI_SSID"
 #define WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
 

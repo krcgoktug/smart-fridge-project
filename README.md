@@ -1,59 +1,48 @@
 # Zero Waste Smart Fridge
 
-A real-time **IoT + computer-vision** system that helps reduce household food
-waste. Sensors watch the storage environment, an ESP32-CAM continuously
-monitors a transparent box, a Python service reads product QR codes and
-measures banana spoilage, and a Flutter app shows everything live.
+A simple, real **IoT + mobile** university project. Two ESP32 devices watch a
+storage box, Firebase carries the data, and a clean Flutter app shows it.
 
-> University-style IoT project — ESP32 hardware, a Python computer-vision
-> service, Firebase Realtime Database, and a Flutter dashboard app. No fake
-> AI, no faked camera previews.
+No backend. No AI. No fake hardware. Just sensors, a camera, QR codes,
+Firebase and a mobile app.
 
 ---
 
-## Architecture in one line
+## What it does
 
-Four independent layers, each doing exactly one job:
+- An **ESP32 DevKit** reads temperature, humidity, gas and weight and uploads
+  them live to Firebase.
+- An **ESP32-CAM** runs a camera web server (live stream + snapshot).
+- The **Flutter app** shows the sensors, the live camera stream, and lets you
+  **scan product QR codes** from the camera to register products.
+- Products get an **expiry status** (Fresh / Expiring Soon / Expired) and the
+  app raises **alerts**.
+
+## Two devices
+
+| Device | Job |
+|--------|-----|
+| **ESP32 DevKit** | MQ135 gas, DHT11 temp+humidity, HX711 weight → Firebase |
+| **ESP32-CAM** | CameraWebServer: `/`, `/stream`, `/capture` |
+
+The two are independent. Each ESP32-CAM gets its **own local IP** — you enter
+it in the app (it is never hard-coded).
+
+## Architecture
 
 ```
-ESP32 DevKit ─ sensors ─────────┐
-                                ├─> Firebase Realtime DB ─> Flutter app (read-only)
-Image analysis service ─ CV ────┘            ^
-   (QR + banana + camera + alerts)           │
-ESP32-CAM ─ MJPEG stream ────────────────────┘  (service pulls frames; app shows stream)
+ESP32 DevKit ──Wi-Fi──> Firebase Realtime DB ──> Flutter app
+ESP32-CAM    ──local network MJPEG/capture──────> Flutter app
 ```
 
-Full design + diagrams: **[docs/architecture.md](docs/architecture.md)**.
+Full details + diagram: **[docs/architecture.md](docs/architecture.md)**.
 
-| Layer | What it does |
-|-------|--------------|
-| **ESP32 DevKit V1** | Reads HX711 weight, DHT11 temperature, MQ135 gas. Sends a heartbeat to Firebase every 10 s. |
-| **ESP32-CAM** | Camera only — always-on MJPEG stream + snapshot endpoint. No QR, no AI, no Firebase. |
-| **Image analysis service** | Python: pulls camera frames, decodes QR codes (OpenCV + pyzbar), runs pixel-based banana browning analysis (HSV), publishes camera status and alerts to Firebase. |
-| **Flutter app** | Read-only dashboard: live sensors, QR products, banana analysis, camera stream, alerts. |
+### Honest network note
 
-If the ESP32 sends nothing for **60 s**, the app shows **"ESP32 Offline"**.
-
----
-
-## Running the app
-
-The Flutter app is a **read-only viewer** of the Firebase data.
-
-- **Android app / local run** — for the **live ESP32-CAM stream** the app must
-  run where it can reach the camera on the **same Wi-Fi** (Android phone or a
-  local `flutter run`).
-- **Web build** — can show sensors, products, banana analysis and alerts, but
-  **not** the live camera: a browser blocks the ESP32-CAM's HTTP stream from
-  an HTTPS page (mixed content).
-
-This is a real limitation of local HTTP IoT devices, explained honestly in
-**[docs/camera-limitations.md](docs/camera-limitations.md)** — the project does
-not fake camera previews or claim a hosted page can show the live stream.
-
-Exact Windows commands for a local Chrome run, an Android phone run, an APK
-build and hardware mode are in
-**[mobile/smart_fridge_app/README.md](mobile/smart_fridge_app/README.md#running-the-app-windows)**.
+- **Sensor data is cloud-based** — through Firebase, so every team member sees
+  it live from anywhere, even though the ESP32 is plugged into one PC.
+- **The ESP32-CAM stream is local-network only** — only a phone/PC on the
+  **same Wi-Fi** as the camera can view `http://<camera-ip>/stream`.
 
 ---
 
@@ -62,89 +51,55 @@ build and hardware mode are in
 ```
 smart-fridge-project/
   README.md
-  docs/                       Setup guide, architecture, schema, QR, banana, camera, wiring
+  docs/                     architecture, wiring, firebase-schema, setup
   firmware/
-    esp32-devkit/             ESP32 DevKit — sensor controller sketch
-    esp32-cam/                ESP32-CAM — camera-only sketch
-  backend/
-    image-analysis-service/   Python QR + banana CV processing service
+    esp32-devkit/           sensor controller (DHT11 + MQ135 + HX711)
+    esp32-cam/              camera (CameraWebServer)
   mobile/
-    smart_fridge_app/         Flutter dashboard app (read-only viewer)
-  qr-samples/                 Sample product QR payloads + generation guide
+    smart_fridge_app/       Flutter app (5 screens)
+  qr-samples/               sample product QR payloads + guide
 ```
 
 ---
 
-## Setup
+## Setup (short version)
 
-> **New to this? Follow the click-by-click walkthrough:
-> [docs/setup-guide.md](docs/setup-guide.md)** — it covers creating the
-> Firebase database, filling in the config files and flashing both ESP32
-> boards, step by step. The summary below is the short version.
+Full step-by-step: **[docs/setup-guide.md](docs/setup-guide.md)**.
 
-### 1. Firebase
-
-1. Create a project at <https://console.firebase.google.com>.
-2. Enable **Realtime Database** (not Firestore).
-3. The structure is in [docs/firebase-schema.md](docs/firebase-schema.md) —
-   the ESP32 and the service create the nodes automatically once configured.
-
-### 2. Firmware
-
-- ESP32 DevKit (sensors): [firmware/esp32-devkit/README.md](firmware/esp32-devkit/README.md)
-- ESP32-CAM (camera): [firmware/esp32-cam/README.md](firmware/esp32-cam/README.md)
-- Wiring: [docs/wiring.md](docs/wiring.md)
-
-### 3. Image analysis service
-
-```bash
-cd backend/image-analysis-service
-python -m venv .venv
-.venv/Scripts/activate              # Windows
-pip install -r requirements.txt
-cp .env.example .env                # set CAMERA_BASE_URL + Firebase
-python app.py                       # continuous QR + banana processing
-```
-
-Details: [backend/image-analysis-service/README.md](backend/image-analysis-service/README.md).
-
-### 4. Flutter app
-
-```bash
-cd mobile/smart_fridge_app
-flutter pub get
-flutterfire configure               # generates lib/firebase_options.dart
-flutter run                         # or: flutter build apk
-```
-
-Details: [mobile/smart_fridge_app/README.md](mobile/smart_fridge_app/README.md).
+1. **Firebase** — create a project, enable **Realtime Database**.
+2. **ESP32 DevKit** — `firmware/esp32-devkit/`: copy `secrets.example.h` →
+   `secrets.h`, fill in Wi-Fi + Firebase, upload.
+3. **ESP32-CAM** — `firmware/esp32-cam/`: copy `cam_secrets.example.h` →
+   `cam_secrets.h`, fill in Wi-Fi, upload. Note the IP it prints.
+4. **App** — `mobile/smart_fridge_app/`:
+   ```bash
+   flutter pub get
+   flutterfire configure      # generates lib/firebase_options.dart
+   flutter run
+   ```
+   Open the **Camera** tab, enter the ESP32-CAM IP, and scan product QR codes.
 
 ---
 
 ## QR codes
 
-Each product carries our own printed QR sticker with a small JSON payload:
+Each product has a printed QR sticker holding a small JSON payload:
 
 ```json
-{ "productId": "banana_001", "name": "Banana",
-  "expiryDate": "2026-05-25", "category": "Fruit" }
+{ "productId": "milk_001", "name": "Milk", "category": "Dairy",
+  "expiryDate": "2026-05-25", "addedDate": "2026-05-18" }
 ```
 
-The service decodes it from the camera frame and registers the product
-automatically — there is **no manual product entry**. See
-[docs/qr-system.md](docs/qr-system.md) and [qr-samples/](qr-samples/).
+Samples + a generation guide: [qr-samples/](qr-samples/).
 
 ---
 
 ## Security
 
-- **No real secrets are committed.** Credentials use `*.example` templates and
-  `.gitignore` (`secrets.h`, `cam_secrets.h`, `.env`).
-- `lib/firebase_options.dart` ships with placeholder values so the app
-  compiles; replace it with `flutterfire configure`.
-
----
+No real secrets are committed. Wi-Fi / Firebase credentials use `*.example`
+templates (`secrets.h`, `cam_secrets.h` are git-ignored). `firebase_options.dart`
+ships with placeholders — replace it with `flutterfire configure`.
 
 ## License
 
-Educational / university project. Free to use for learning purposes.
+Educational / university project. Free to use for learning.
