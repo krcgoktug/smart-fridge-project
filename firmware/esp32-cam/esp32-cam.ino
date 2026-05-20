@@ -36,6 +36,7 @@
 #include "cam_secrets.h"   // copy from cam_secrets.example.h (git-ignored)
 
 static httpd_handle_t camera_httpd = NULL;
+static httpd_handle_t stream_httpd = NULL;
 
 #define PART_BOUNDARY "123456789000000000000987654321"
 static const char* STREAM_CONTENT_TYPE =
@@ -70,14 +71,17 @@ bool initCamera() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
 
+  // Single frame buffer + LATEST grab mode avoids cam_hal: FB-OVF (frame
+  // buffer overflow) errors that can hang /capture and / endpoints.
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+  config.grab_mode   = CAMERA_GRAB_LATEST;
+  config.fb_count    = 1;
   if (psramFound()) {
-    config.frame_size   = FRAMESIZE_VGA;   // 640x480, good for QR + CV
+    config.frame_size   = FRAMESIZE_VGA;   // 640x480, good for QR
     config.jpeg_quality = 12;
-    config.fb_count     = 2;
   } else {
     config.frame_size   = FRAMESIZE_CIF;
     config.jpeg_quality = 15;
-    config.fb_count     = 1;
   }
 
   esp_err_t err = esp_camera_init(&config);
@@ -135,30 +139,36 @@ static esp_err_t indexHandler(httpd_req_t* req) {
     "<!DOCTYPE html><html><head><title>Smart Fridge Camera</title>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
     "<style>body{font-family:sans-serif;text-align:center;background:#111;"
-    "color:#eee;margin:0;padding:16px}img{max-width:100%;border-radius:8px}"
-    "</style></head><body><h2>Zero Waste Smart Fridge</h2>"
-    "<p>Live camera</p><img src='/stream'>"
-    "<p><a style='color:#4caf50' href='/capture'>/capture</a> "
-    "for a single frame</p></body></html>";
+    "color:#eee;margin:0;padding:16px}a{color:#4caf50}</style>"
+    "</head><body><h2>Smart Fridge Camera</h2>"
+    "<p>Stream is on port 81, capture is on port 80.</p>"
+    "<p><a href='/capture'>/capture (single frame)</a></p>"
+    "</body></html>";
   httpd_resp_set_type(req, "text/html");
   return httpd_resp_send(req, page, strlen(page));
 }
 
 void startCameraServer() {
-  httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-  config.server_port = 80;
-
+  // Two HTTP server tasks so /stream (long-lived) cannot block /capture.
+  // Port 80 -> /, /capture     (short requests)
+  // Port 81 -> /stream         (long-lived MJPEG)
+  httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
+  cfg.server_port = 80;
+  cfg.ctrl_port   = 32768;
   httpd_uri_t indexUri   = { "/",        HTTP_GET, indexHandler,   NULL };
-  httpd_uri_t streamUri  = { "/stream",  HTTP_GET, streamHandler,  NULL };
   httpd_uri_t captureUri = { "/capture", HTTP_GET, captureHandler, NULL };
-
-  if (httpd_start(&camera_httpd, &config) == ESP_OK) {
+  if (httpd_start(&camera_httpd, &cfg) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &indexUri);
-    httpd_register_uri_handler(camera_httpd, &streamUri);
     httpd_register_uri_handler(camera_httpd, &captureUri);
-    Serial.println("[HTTP] camera server started on port 80.");
-  } else {
-    Serial.println("[HTTP] failed to start camera server.");
+    Serial.println("[HTTP] port 80 (capture) started.");
+  }
+
+  cfg.server_port = 81;
+  cfg.ctrl_port   = 32769;
+  httpd_uri_t streamUri  = { "/stream",  HTTP_GET, streamHandler,  NULL };
+  if (httpd_start(&stream_httpd, &cfg) == ESP_OK) {
+    httpd_register_uri_handler(stream_httpd, &streamUri);
+    Serial.println("[HTTP] port 81 (stream)  started.");
   }
 }
 
@@ -207,7 +217,7 @@ void setup() {
     Serial.println();
     Serial.println("Camera Ready!");
     Serial.println("Local IP: " + ip);
-    Serial.println("Stream:   http://" + ip + "/stream");
+    Serial.println("Stream:   http://" + ip + ":81/stream");
     Serial.println("Capture:  http://" + ip + "/capture");
     Serial.println();
     Serial.println(">> Enter this IP in the app's Camera screen.");

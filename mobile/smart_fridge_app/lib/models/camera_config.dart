@@ -24,7 +24,8 @@ class CameraConfig {
     return s.replaceAll(RegExp(r'/+$'), '');
   }
 
-  String get streamUrl => localIp.isEmpty ? '' : '$baseUrl/stream';
+  /// Stream is on port 81 so it cannot block /capture (which stays on port 80).
+  String get streamUrl => localIp.isEmpty ? '' : '$baseUrl:81/stream';
   String get captureUrl => localIp.isEmpty ? '' : '$baseUrl/capture';
 
   factory CameraConfig.fromMap(Map<dynamic, dynamic>? map) {

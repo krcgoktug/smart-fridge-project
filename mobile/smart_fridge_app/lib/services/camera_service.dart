@@ -41,7 +41,8 @@ class CameraService {
   }
 
   /// Decodes a QR code from JPEG bytes. Pure Dart (zxing2). Returns the QR
-  /// text, or null when no QR code is found.
+  /// text, or null when no QR code is found. Tries two binarizers for
+  /// robustness against difficult lighting / angles.
   static String? decodeQr(Uint8List bytes) {
     final img.Image? decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
@@ -54,9 +55,14 @@ class CameraService {
           .buffer
           .asInt32List(),
     );
-    final bitmap = BinaryBitmap(HybridBinarizer(source));
+    final reader = QRCodeReader();
+    // First try the hybrid binarizer (good for varying lighting), then fall
+    // back to the global histogram binarizer (better for uniform lighting).
     try {
-      return QRCodeReader().decode(bitmap).text;
+      return reader.decode(BinaryBitmap(HybridBinarizer(source))).text;
+    } catch (_) {}
+    try {
+      return reader.decode(BinaryBitmap(GlobalHistogramBinarizer(source))).text;
     } catch (_) {
       return null;
     }

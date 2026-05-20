@@ -53,16 +53,16 @@ void main() {
   });
 
   group('CameraConfig', () {
-    test('builds stream and capture URLs from a bare IP', () {
+    test('builds stream (port 81) and capture (port 80) URLs from a bare IP', () {
       final CameraConfig c = CameraConfig(localIp: '172.19.15.112');
-      expect(c.streamUrl, 'http://172.19.15.112/stream');
+      expect(c.streamUrl, 'http://172.19.15.112:81/stream');
       expect(c.captureUrl, 'http://172.19.15.112/capture');
       expect(c.isConfigured, isTrue);
     });
 
     test('accepts an IP that already has http://', () {
       final CameraConfig c = CameraConfig(localIp: 'http://192.168.1.44/');
-      expect(c.streamUrl, 'http://192.168.1.44/stream');
+      expect(c.streamUrl, 'http://192.168.1.44:81/stream');
     });
 
     test('empty when not configured', () {
