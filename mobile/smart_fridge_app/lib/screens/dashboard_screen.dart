@@ -1,15 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
 import '../models/alert.dart';
+import '../models/banana_analysis.dart';
 import '../models/camera_config.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import '../services/alert_service.dart';
+import '../services/banana_state.dart';
 import '../services/firebase_service.dart';
 import '../utils/status_colors.dart';
+import '../widgets/camera_stream_web.dart'
+    if (dart.library.io) '../widgets/camera_stream_io.dart';
 import '../widgets/product_card.dart';
 import '../widgets/sensor_card.dart';
 
@@ -59,27 +62,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     AsyncSnapshot<CameraConfig> cSnap) {
                   final CameraConfig camera =
                       cSnap.data ?? CameraConfig();
-                  final List<Alert> alerts = AlertService.derive(
-                    sensors: sensors,
-                    products: products,
-                  );
-                  return ListView(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
-                    children: <Widget>[
-                      _Esp32Card(sensors: sensors),
-                      const SizedBox(height: 14),
-                      const _SectionTitle('Environment'),
-                      _SensorGrid(sensors: sensors),
-                      const SizedBox(height: 16),
-                      const _SectionTitle('Camera'),
-                      _CameraPreview(camera: camera),
-                      const SizedBox(height: 16),
-                      _SectionTitle('Products (${products.length})'),
-                      _LatestProducts(products: products),
-                      const SizedBox(height: 16),
-                      _SectionTitle('Alerts (${alerts.length})'),
-                      _AlertSummary(alerts: alerts),
-                    ],
+                  return StreamBuilder<BananaAnalysis>(
+                    stream: BananaState.stream(),
+                    builder: (BuildContext context,
+                        AsyncSnapshot<BananaAnalysis> bSnap) {
+                      final BananaAnalysis banana =
+                          bSnap.data ?? BananaAnalysis.empty();
+                      final List<Alert> alerts = AlertService.derive(
+                        sensors: sensors,
+                        products: products,
+                        banana: banana,
+                      );
+                      return ListView(
+                        padding:
+                            const EdgeInsets.fromLTRB(14, 14, 14, 24),
+                        children: <Widget>[
+                          _Esp32Card(sensors: sensors),
+                          const SizedBox(height: 14),
+                          const _SectionTitle('Environment'),
+                          _SensorGrid(sensors: sensors),
+                          const SizedBox(height: 16),
+                          const _SectionTitle('Camera'),
+                          _CameraPreview(camera: camera),
+                          const SizedBox(height: 16),
+                          _SectionTitle('Products (${products.length})'),
+                          _LatestProducts(products: products),
+                          const SizedBox(height: 16),
+                          _SectionTitle('Alerts (${alerts.length})'),
+                          _AlertSummary(alerts: alerts),
+                        ],
+                      );
+                    },
                   );
                 },
               );
@@ -238,15 +251,9 @@ class _CameraPreview extends StatelessWidget {
           aspectRatio: 16 / 9,
           child: Container(
             color: Colors.black,
-            child: Mjpeg(
-              stream: camera.streamUrl,
-              isLive: true,
-              fit: BoxFit.contain,
-              error: (BuildContext context, dynamic e, dynamic s) =>
-                  const Center(
-                child: Text('Camera preview unavailable',
-                    style: TextStyle(color: Colors.white60, fontSize: 12)),
-              ),
+            child: CameraStream(
+              streamUrl: camera.streamUrl,
+              captureUrl: camera.captureUrl,
             ),
           ),
         ),

@@ -1,4 +1,5 @@
 import '../models/alert.dart';
+import '../models/banana_analysis.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 
@@ -9,8 +10,23 @@ class AlertService {
     required List<Product> products,
     bool cameraConfigured = false,
     bool cameraOnline = true,
+    BananaAnalysis? banana,
   }) {
     final List<Alert> alerts = <Alert>[];
+
+    // Banana browning alert when >= 50 %.
+    if (banana != null && banana.detected && banana.spotPercent >= 50) {
+      final bool spoiled = banana.spotPercent >= 80;
+      alerts.add(Alert(
+        message: spoiled
+            ? 'Banana is spoiled — '
+                '${banana.spotPercent.toStringAsFixed(0)} % browning, discard.'
+            : 'Banana is spoiling — '
+                '${banana.spotPercent.toStringAsFixed(0)} % browning, consume soon.',
+        severity: spoiled ? 'danger' : 'warning',
+        type: 'banana',
+      ));
+    }
 
     if (!sensors.isOnline) {
       alerts.add(const Alert(

@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/alert.dart';
+import '../models/banana_analysis.dart';
 import '../models/camera_config.dart';
 import '../models/product.dart';
 import '../models/sensor_data.dart';
 import '../services/alert_service.dart';
+import '../services/banana_state.dart';
 import '../services/camera_service.dart';
 import '../services/firebase_service.dart';
 import '../utils/status_colors.dart';
@@ -72,37 +74,46 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     WidgetsBinding.instance
                         .addPostFrameCallback((_) => _checkCamera());
                   }
-                  final List<Alert> alerts = AlertService.derive(
-                    sensors: sensors,
-                    products: products,
-                    cameraConfigured: camera.isConfigured,
-                    cameraOnline: _cameraOnline,
-                  );
-                  if (alerts.isEmpty) {
-                    return const _NoAlerts();
-                  }
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(14),
-                    itemCount: alerts.length,
-                    itemBuilder: (BuildContext context, int i) {
-                      final Alert a = alerts[i];
-                      final Color color =
-                          StatusColors.forSeverity(a.severity);
-                      return Card(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor:
-                                color.withValues(alpha: 0.15),
-                            child: Icon(
-                                StatusColors.iconForSeverity(a.severity),
-                                color: color),
-                          ),
-                          title: Text(a.message),
-                          subtitle: Text(a.type.toUpperCase(),
-                              style: const TextStyle(fontSize: 11)),
-                        ),
+                  return StreamBuilder<BananaAnalysis>(
+                    stream: BananaState.stream(),
+                    builder: (BuildContext context,
+                        AsyncSnapshot<BananaAnalysis> bSnap) {
+                      final BananaAnalysis banana =
+                          bSnap.data ?? BananaAnalysis.empty();
+                      final List<Alert> alerts = AlertService.derive(
+                        sensors: sensors,
+                        products: products,
+                        cameraConfigured: camera.isConfigured,
+                        cameraOnline: _cameraOnline,
+                        banana: banana,
+                      );
+                      if (alerts.isEmpty) {
+                        return const _NoAlerts();
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(14),
+                        itemCount: alerts.length,
+                        itemBuilder: (BuildContext context, int i) {
+                          final Alert a = alerts[i];
+                          final Color color =
+                              StatusColors.forSeverity(a.severity);
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor:
+                                    color.withValues(alpha: 0.15),
+                                child: Icon(
+                                    StatusColors.iconForSeverity(a.severity),
+                                    color: color),
+                              ),
+                              title: Text(a.message),
+                              subtitle: Text(a.type.toUpperCase(),
+                                  style: const TextStyle(fontSize: 11)),
+                            ),
+                          );
+                        },
                       );
                     },
                   );

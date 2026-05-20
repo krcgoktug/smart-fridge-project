@@ -3,14 +3,19 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
+import '../models/banana_analysis.dart';
 import '../models/camera_config.dart';
 import '../models/product.dart';
+import '../services/banana_analysis_service.dart';
+import '../services/banana_state.dart';
 import '../services/camera_service.dart';
 import '../services/firebase_service.dart';
 import '../services/settings_service.dart';
 import '../utils/status_colors.dart';
+// Conditional import: web uses an HTML <img>, mobile/desktop uses flutter_mjpeg.
+import '../widgets/camera_stream_web.dart'
+    if (dart.library.io) '../widgets/camera_stream_io.dart';
 
 /// Screen 2 - Camera. Configure the ESP32-CAM IP, view the live stream,
 /// test the connection, capture a frame and scan product QR codes.
@@ -32,6 +37,17 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
   bool _busy = false;
   Uint8List? _capturedImage;
 
+  // Auto-scan: periodically pull a frame, decode QR, register on success.
+  Timer? _autoScanTimer;
+  bool _autoScanning = false;
+  String? _lastAutoRegisteredId;
+  DateTime _lastAutoRegisteredAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Auto-add a "Banana (visual)" product whenever the camera sees a banana.
+  // We only re-save when the freshness status changes, to avoid spamming the
+  // products stream every 1.5 s.
+  String? _lastBananaStatusSaved;
+
   @override
   void initState() {
     super.initState();
@@ -40,10 +56,16 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
     if (_activeIp.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _testConnection());
     }
+    // Auto-scan every 1.5 s while the screen is open.
+    _autoScanTimer = Timer.periodic(
+      const Duration(milliseconds: 1500),
+      (_) => _autoScanTick(),
+    );
   }
 
   @override
   void dispose() {
+    _autoScanTimer?.cancel();
     _ipController.dispose();
     super.dispose();
   }
@@ -158,6 +180,95 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
     _snack('${product.name} registered from QR code.', StatusColors.fresh);
   }
 
+  /// Silent periodic QR scan: no error popups, only a success snackbar when
+  /// a *new* product is registered. De-duplicates re-scans of the same QR
+  /// within 8 s so the user doesn't see endless toasts.
+  Future<void> _autoScanTick() async {
+    if (_autoScanning || _busy || _testing) return;
+    if (_activeIp.isEmpty) return;
+    _autoScanning = true;
+    try {
+      final Uint8List? bytes =
+          await CameraService.captureImage(_config.captureUrl);
+      if (bytes == null) return;
+
+      // 1) Banana browning analysis (runs every cycle, always).
+      final BananaAnalysis banana =
+          BananaAnalysisService.analyzeBytes(bytes);
+      BananaState.update(banana);
+
+      // 1b) Auto-add / refresh the banana product when we see one.
+      await _upsertBananaProduct(banana);
+
+      // 2) QR scan (only if a QR is visible).
+      final String? qr = CameraService.decodeQr(bytes);
+      if (qr == null) return;
+      final Product? product = _parseProduct(qr);
+      if (product == null) return;
+      if (product.productId == _lastAutoRegisteredId &&
+          DateTime.now().difference(_lastAutoRegisteredAt).inSeconds < 8) {
+        return;
+      }
+      await FirebaseService.saveProduct(product);
+      _lastAutoRegisteredId = product.productId;
+      _lastAutoRegisteredAt = DateTime.now();
+      if (mounted) {
+        _snack('Auto-registered: ${product.name}', StatusColors.fresh);
+      }
+    } catch (_) {
+      // ignore; auto-scan is best-effort
+    } finally {
+      _autoScanning = false;
+    }
+  }
+
+  /// Upserts a "Banana (visual)" product based on the live camera analysis.
+  /// Only re-saves when the freshness band changes so we don't spam the
+  /// products stream every auto-scan tick.
+  Future<void> _upsertBananaProduct(BananaAnalysis b) async {
+    if (!b.detected) return;
+    if (b.status == _lastBananaStatusSaved) return;
+
+    // Map the visual status to an estimated remaining shelf-life.
+    int daysLeft;
+    switch (b.status) {
+      case 'Fresh':
+        daysLeft = 5;
+        break;
+      case 'Spotting':
+        daysLeft = 3;
+        break;
+      case 'Spoiling':
+        daysLeft = 0;
+        break;
+      case 'Spoiled':
+        daysLeft = -1;
+        break;
+      default:
+        return;
+    }
+
+    String fmt(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-'
+        '${d.month.toString().padLeft(2, '0')}-'
+        '${d.day.toString().padLeft(2, '0')}';
+
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime expiry = today.add(Duration(days: daysLeft));
+
+    final Product banana = Product(
+      productId: 'banana_visual',
+      name: 'Banana (visual)',
+      category: 'Fruit',
+      expiryDate: fmt(expiry),
+      addedDate: fmt(today),
+    );
+
+    await FirebaseService.saveProduct(banana);
+    _lastBananaStatusSaved = b.status;
+  }
+
   Product? _parseProduct(String qrText) {
     try {
       final dynamic decoded = jsonDecode(qrText);
@@ -211,6 +322,8 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
               _streamCard(),
               const SizedBox(height: 12),
               _actionButtons(),
+              const SizedBox(height: 12),
+              const _BananaCard(),
               if (_capturedImage != null) ...<Widget>[
                 const SizedBox(height: 12),
                 _capturedCard(),
@@ -312,16 +425,9 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
       child = const _StreamMessage(
           'Enter and save the ESP32-CAM IP to see the live stream.');
     } else {
-      child = Mjpeg(
-        key: ValueKey<String>(_config.streamUrl),
-        stream: _config.streamUrl,
-        isLive: true,
-        fit: BoxFit.contain,
-        error: (BuildContext context, dynamic e, dynamic s) =>
-            const _StreamMessage(
-          'Camera unavailable. Make sure the ESP32-CAM and this device '
-          'are connected to the same Wi-Fi/network.',
-        ),
+      child = CameraStream(
+        streamUrl: _config.streamUrl,
+        captureUrl: _config.captureUrl,
       );
     }
     return ClipRRect(
@@ -391,12 +497,33 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: const Padding(
         padding: EdgeInsets.all(14),
-        child: Text(
-          'The ESP32-CAM stream is on the local network. This phone/PC must '
-          'be on the SAME Wi-Fi as the camera to view it. Sensor data, '
-          'products and alerts go through Firebase and are visible to all '
-          'team members anywhere.',
-          style: TextStyle(fontSize: 12.5, color: Colors.black87),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.auto_awesome, size: 16, color: Color(0xFF2E7D32)),
+                SizedBox(width: 6),
+                Text('Auto-scan is ON',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF2E7D32))),
+              ],
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Just hold a product QR code in front of the camera — it will '
+              'be registered automatically within ~1.5 s. Use the Scan QR '
+              'button for an immediate manual scan.',
+              style: TextStyle(fontSize: 12.5, color: Colors.black87),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'The ESP32-CAM stream is on the local network — this phone/PC '
+              'must share the same Wi-Fi as the camera.',
+              style: TextStyle(fontSize: 11.5, color: Colors.black54),
+            ),
+          ],
         ),
       ),
     );
@@ -417,5 +544,124 @@ class _StreamMessage extends StatelessWidget {
             style: const TextStyle(color: Colors.white70)),
       ),
     );
+  }
+}
+
+/// Live banana browning analysis result. Refreshes every auto-scan cycle.
+class _BananaCard extends StatelessWidget {
+  const _BananaCard();
+
+  static Color _statusColor(String s) {
+    switch (s) {
+      case 'Fresh':
+        return StatusColors.fresh;
+      case 'Spotting':
+        return StatusColors.warning;
+      case 'Spoiling':
+        return const Color(0xFFE65100); // orange
+      case 'Spoiled':
+        return StatusColors.danger;
+      default:
+        return StatusColors.neutral;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<BananaAnalysis>(
+      stream: BananaState.stream(),
+      builder: (BuildContext context,
+          AsyncSnapshot<BananaAnalysis> snap) {
+        final BananaAnalysis b = snap.data ?? BananaAnalysis.empty();
+        final Color color = _statusColor(b.status);
+        return Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Icon(Icons.eco, color: Color(0xFF2E7D32)),
+                    const SizedBox(width: 8),
+                    const Text('Banana browning',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: color),
+                      ),
+                      child: Text(b.status,
+                          style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (!b.detected)
+                  const Text(
+                    'No banana visible in the frame. Place a yellow banana '
+                    'in front of the camera to start the analysis.',
+                    style:
+                        TextStyle(fontSize: 12.5, color: Colors.black54),
+                  )
+                else ...<Widget>[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: <Widget>[
+                      const Text('Spot coverage'),
+                      Text('${b.spotPercent.toStringAsFixed(1)} %',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, color: color)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value:
+                          (b.spotPercent / 100).clamp(0, 1).toDouble(),
+                      minHeight: 8,
+                      backgroundColor: Colors.black12,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _statusHint(b.status, b.spotPercent),
+                    style: const TextStyle(
+                        fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _statusHint(String status, double pct) {
+    switch (status) {
+      case 'Fresh':
+        return 'Healthy banana — under 20 % spots.';
+      case 'Spotting':
+        return 'Light spotting — still fine to eat.';
+      case 'Spoiling':
+        return 'Spoilage started — consume soon.';
+      case 'Spoiled':
+        return 'Heavily spoiled — discard.';
+      default:
+        return '';
+    }
   }
 }
