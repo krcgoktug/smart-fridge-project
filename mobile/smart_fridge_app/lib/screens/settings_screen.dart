@@ -3,11 +3,47 @@ import 'package:flutter/material.dart';
 import '../app_config.dart';
 import '../models/camera_config.dart';
 import '../services/firebase_service.dart';
+import '../services/settings_service.dart';
 import '../utils/status_colors.dart';
 
-/// Screen 5 - Settings. Firebase info, camera IP, hardware-mode notes.
-class SettingsScreen extends StatelessWidget {
+/// Screen 5 - Settings. Firebase info, camera IP, Arduino sensor bridge.
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late final TextEditingController _bridgeCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _bridgeCtrl =
+        TextEditingController(text: SettingsService.sensorBridgeUrl);
+  }
+
+  @override
+  void dispose() {
+    _bridgeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveBridge() async {
+    final String url = _bridgeCtrl.text.trim().isEmpty
+        ? SettingsService.defaultSensorBridgeUrl
+        : _bridgeCtrl.text.trim();
+    await SettingsService.setSensorBridgeUrl(url);
+    if (!mounted) return;
+    setState(() => _bridgeCtrl.text = url);
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Arduino bridge URL saved.'),
+        backgroundColor: StatusColors.fresh,
+      ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,17 +69,54 @@ class SettingsScreen extends StatelessWidget {
           ),
           if (!ready)
             const Card(
-              color: Color(0xFFFDECEA),
+              color: Color(0xFFFFF7E0),
               child: Padding(
                 padding: EdgeInsets.all(14),
                 child: Text(
-                  'Firebase is using placeholder settings, so no live data '
-                  'is shown. Run "flutterfire configure" to connect a real '
-                  'project, then restart the app.',
+                  'Firebase is not configured. The app reads sensors directly '
+                  'from the Arduino Uno through the local Python bridge below, '
+                  'and keeps scanned products in an in-memory list.',
                   style: TextStyle(fontSize: 13, height: 1.4),
                 ),
               ),
             ),
+          _Card(
+            title: 'Arduino Uno bridge (sensors)',
+            children: <Widget>[
+              const _Note(
+                'The Arduino Uno has no Wi-Fi, so it connects to the laptop '
+                'over USB. Start the helper:',
+              ),
+              const SizedBox(height: 6),
+              const _Code('python bridge/arduino_serial_bridge.py'),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _bridgeCtrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Bridge URL',
+                  hintText: 'http://localhost:8787',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (_) => _saveBridge(),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: _saveBridge,
+                  child: const Text('Save'),
+                ),
+              ),
+              const SizedBox(height: 4),
+              const _Note(
+                'Use http://localhost:8787 when the app and the bridge run on '
+                'the same machine. Use http://<laptop-LAN-IP>:8787 when the '
+                'app is on a phone/another PC.',
+              ),
+            ],
+          ),
           StreamBuilder<CameraConfig>(
             stream: FirebaseService.cameraStream(),
             builder:
@@ -73,15 +146,16 @@ class SettingsScreen extends StatelessWidget {
             title: 'Hardware mode — how the network works',
             children: <Widget>[
               _Note(
-                'Sensor data (temperature, humidity, gas, weight), products '
-                'and alerts go through Firebase. Every team member sees them '
-                'live — even though the ESP32 is plugged into just one PC.',
+                'Sensors live on an Arduino Uno (DHT11, MQ135, HX711 load '
+                'cells). The Uno talks JSON over USB to the laptop; a small '
+                'Python script exposes the latest reading on '
+                'http://localhost:8787/sensors and the app polls it.',
               ),
               SizedBox(height: 8),
               _Note(
-                'The ESP32-CAM live stream is on the LOCAL network. Only a '
-                'phone/PC on the SAME Wi-Fi as the camera can view '
-                'http://CAMERA_IP/stream.',
+                'The ESP32-CAM live stream is on the LOCAL Wi-Fi network. '
+                'Only a phone/PC on the SAME Wi-Fi as the camera can view '
+                'http://CAMERA_IP:81/stream.',
               ),
             ],
           ),
@@ -90,7 +164,7 @@ class SettingsScreen extends StatelessWidget {
             children: <Widget>[
               _Row(label: 'App', value: 'Zero Waste Smart Fridge'),
               _Row(label: 'Version', value: '1.0.0'),
-              _Row(label: 'Devices', value: 'ESP32 DevKit + ESP32-CAM'),
+              _Row(label: 'Devices', value: 'Arduino Uno + ESP32-CAM'),
             ],
           ),
         ],
@@ -163,5 +237,28 @@ class _Note extends StatelessWidget {
     return Text(text,
         style: const TextStyle(
             fontSize: 12.5, color: Colors.black87, height: 1.4));
+  }
+}
+
+class _Code extends StatelessWidget {
+  const _Code(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: SelectableText(
+        text,
+        style: const TextStyle(
+            fontFamily: 'monospace', fontSize: 12, color: Colors.black87),
+      ),
+    );
   }
 }
