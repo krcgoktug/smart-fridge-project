@@ -1,33 +1,9 @@
 // =====================================================================
 //  Zero Waste Smart Fridge - Arduino Uno sensor node
 // =====================================================================
-//
-//  All three sensors + an alarm LED on a single Arduino Uno. Every two
-//  seconds the sketch prints a human-readable block and one JSON line:
-//
-//    {"temperature":24.3,"humidity":45,"gasValue":312,"weight":12.34,
-//     "riskScore":40}
-//
-//  The Python bridge (bridge/arduino_serial_bridge.py) parses the JSON
-//  line and serves it on http://localhost:8787/sensors so the Flutter
-//  app can show the live values.
-//
-//  Wiring:
-//    DHT11   DATA  -> D3      (VCC -> 5 V, GND -> GND)
-//    MQ135   AOUT  -> A0      (VCC -> 5 V, GND -> GND)
-//    HX711   DT    -> D4      (VCC -> 5 V, GND -> GND)
-//    HX711   SCK   -> D5
-//    LED     +     -> D9      (through a 330 ohm resistor to GND)
-//
-//  Libraries (Library Manager):
-//    - "DHT sensor library" by Adafruit (pulls Adafruit Unified Sensor)
-//    - "HX711 Arduino Library" by Bogdan Necula
-//
-//  Serial console (also accepts commands):
-//    t / T  -> re-tare the HX711
-//    l / L  -> toggle the LED for a quick wiring test
-//
-//  Baud rate: 9600 (matches the Python bridge default).
+//  DHT11 DATA -> D3 | MQ135 AOUT -> A0 | HX711 DT -> D4, SCK -> D5 | LED -> D9
+//  Libraries: "DHT sensor library" (Adafruit) + "HX711 Arduino Library" (Bogdan Necula)
+//  Serial: 9600 baud. Commands: t/T = re-tare, l/L = LED toggle.
 // =====================================================================
 
 #include <DHT.h>
@@ -47,16 +23,8 @@ HX711 scale;
 
 // ===================== SETTINGS =====================
 const int SAMPLE_COUNT = 30;
-
-// MQ135 baseline (taken in setup() while the air is clean).
 int mq135Baseline = 0;
-
-// HX711 calibration. Place a known mass and tune until the readings
-// match the actual grams. If the weight comes out negative, flip the
-// sign here.
-float calibration_factor = 420.5;
-
-// Reporting cadence.
+float calibration_factor = 420.5;   // negatif gelirse -420.5 dene
 unsigned long lastReadTime = 0;
 const unsigned long READ_INTERVAL = 2000;
 
@@ -129,7 +97,6 @@ int readMQ135Filtered() {
   for (int i = 0; i < SAMPLE_COUNT; i++) gasTotal += samples[i];
   int averageValue = gasTotal / SAMPLE_COUNT;
   int gasValue     = (medianValue + averageValue) / 2;
-  // Amplify deviation from baseline so the dashboard reacts visibly.
   int sensitive    = mq135Baseline + ((gasValue - mq135Baseline) * 3);
   return sensitive;
 }
@@ -138,7 +105,7 @@ int readMQ135Filtered() {
 float readWeight() {
   if (!scale.is_ready()) return -999;
   float w = scale.get_units(10);
-  if (abs(w) < 2.0) w = 0;     // squash sub-2 g noise to a clean 0
+  if (abs(w) < 2.0) w = 0;
   return w;
 }
 
@@ -147,15 +114,12 @@ int calculateRiskScore(float temperature, float humidity, int gasValue) {
   int risk = 0;
   if      (temperature > 30) risk += 20;
   else if (temperature > 25) risk += 10;
-
   if      (humidity > 80)    risk += 20;
   else if (humidity > 65)    risk += 10;
-
   int gasDiff = gasValue - mq135Baseline;
   if      (gasDiff > 250)    risk += 40;
   else if (gasDiff > 120)    risk += 20;
   else if (gasDiff > 60)     risk += 10;
-
   if (risk > 100) risk = 100;
   if (risk < 0)   risk = 0;
   return risk;
@@ -189,7 +153,6 @@ void setup() {
 
 // ===================== LOOP =====================
 void loop() {
-  // ----- serial commands -----
   if (Serial.available()) {
     char cmd = Serial.read();
     if (cmd == 't' || cmd == 'T') {
@@ -214,10 +177,8 @@ void loop() {
   float weight      = readWeight();
   int   riskScore   = dhtOk ? calculateRiskScore(temperature, humidity, gasValue) : 0;
 
-  // Simple alarm: blink the LED when risk is high.
   digitalWrite(LED_PIN, riskScore >= 70 ? HIGH : LOW);
 
-  // ----- human-readable block -----
   Serial.println(F("===== SENSOR DATA ====="));
   if (dhtOk) {
     Serial.print(F("Sicaklik: "));
@@ -241,7 +202,7 @@ void loop() {
   Serial.print(F("Risk Score: "));
   Serial.println(riskScore);
 
-  // ----- JSON line (consumed by the Python bridge) -----
+  // JSON line (Python bridge bunu okuyor)
   Serial.print(F("{"));
   Serial.print(F("\"temperature\":"));
   Serial.print(dhtOk ? temperature : -999, 1);
