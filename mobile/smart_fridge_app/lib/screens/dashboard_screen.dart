@@ -10,6 +10,7 @@ import '../models/sensor_data.dart';
 import '../services/alert_service.dart';
 import '../services/banana_state.dart';
 import '../services/firebase_service.dart';
+import '../services/settings_service.dart';
 import '../utils/status_colors.dart';
 import '../widgets/camera_stream_web.dart'
     if (dart.library.io) '../widgets/camera_stream_io.dart';
@@ -60,8 +61,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 stream: FirebaseService.cameraStream(),
                 builder: (BuildContext context,
                     AsyncSnapshot<CameraConfig> cSnap) {
-                  final CameraConfig camera =
+                  final CameraConfig streamed =
                       cSnap.data ?? CameraConfig();
+                  // Firebase is off so the shared camera config is empty;
+                  // fall back to the locally-saved ESP32-CAM IP so the
+                  // dashboard preview shows the live stream too.
+                  final CameraConfig camera = streamed.isConfigured
+                      ? streamed
+                      : CameraConfig(localIp: SettingsService.cameraIp);
                   return StreamBuilder<BananaAnalysis>(
                     stream: BananaState.stream(),
                     builder: (BuildContext context,
@@ -78,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             BoxConstraints c) {
                           if (c.maxWidth >= 720) {
                             return _desktopBody(
-                                sensors, camera, products, alerts);
+                                c, sensors, camera, products, alerts);
                           }
                           return _phoneBody(
                               sensors, camera, products, alerts);
@@ -118,57 +125,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Desktop / wide layout: the status banner spans the top, then sensors
-  /// sit beside the camera, and products beside alerts — using the width
-  /// instead of a tall single column. Capped and centered on huge screens.
-  Widget _desktopBody(SensorData sensors, CameraConfig camera,
-      List<Product> products, List<Alert> alerts) {
-    return SingleChildScrollView(
+  /// Desktop / wide layout: status banner across the top, a full-width row
+  /// of four big sensor cards, then the camera fills the remaining height
+  /// with products and alerts stacked underneath — filling the page.
+  Widget _desktopBody(BoxConstraints c, SensorData sensors,
+      CameraConfig camera, List<Product> products, List<Alert> alerts) {
+    return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           _Esp32Card(sensors: sensors),
-          const SizedBox(height: 22),
+          const SizedBox(height: 18),
           // Sensors: a full-width row of four large cards.
           const _SectionTitle('Environment'),
           _SensorGrid(
             sensors: sensors,
             crossAxisCount: 4,
-            childAspectRatio: 2.2,
+            childAspectRatio: 2.4,
             large: true,
           ),
-          const SizedBox(height: 22),
-          // Camera on the left, products + alerts stacked on the right.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    const _SectionTitle('Camera'),
-                    _CameraPreview(camera: camera),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 22),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _SectionTitle('Products (${products.length})'),
-                    _LatestProducts(products: products),
-                    const SizedBox(height: 16),
-                    _SectionTitle('Alerts (${alerts.length})'),
-                    _AlertSummary(alerts: alerts),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 16),
+          // Camera fills the remaining vertical space; products and alerts
+          // sit underneath it, so the page is filled with no empty bottom.
+          const _SectionTitle('Camera'),
+          Expanded(child: _CameraPreview(camera: camera, fill: true)),
+          const SizedBox(height: 14),
+          _SectionTitle('Products (${products.length})'),
+          _LatestProducts(products: products),
+          const SizedBox(height: 14),
+          _SectionTitle('Alerts (${alerts.length})'),
+          _AlertSummary(alerts: alerts),
         ],
       ),
     );
@@ -313,8 +300,13 @@ class _SensorGrid extends StatelessWidget {
 }
 
 class _CameraPreview extends StatelessWidget {
-  const _CameraPreview({required this.camera});
+  const _CameraPreview({required this.camera, this.fill = false});
   final CameraConfig camera;
+
+  /// When true the preview fills its parent box (used by the desktop layout
+  /// where the camera expands to fill the remaining height). Otherwise it
+  /// keeps a 16:9 aspect ratio (phone layout).
+  final bool fill;
 
   @override
   Widget build(BuildContext context) {
@@ -327,20 +319,20 @@ class _CameraPreview extends StatelessWidget {
         ),
       );
     }
+    final Widget video = Container(
+      color: Colors.black,
+      child: CameraStream(
+        streamUrl: camera.streamUrl,
+        captureUrl: camera.captureUrl,
+      ),
+    );
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Container(
-            color: Colors.black,
-            child: CameraStream(
-              streamUrl: camera.streamUrl,
-              captureUrl: camera.captureUrl,
-            ),
-          ),
-        ),
+        child: fill
+            ? SizedBox.expand(child: video)
+            : AspectRatio(aspectRatio: 16 / 9, child: video),
       ),
     );
   }
