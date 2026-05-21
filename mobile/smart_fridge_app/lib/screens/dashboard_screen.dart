@@ -73,30 +73,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         products: products,
                         banana: banana,
                       );
-                      return Center(
-                        child: ConstrainedBox(
-                          constraints:
-                              const BoxConstraints(maxWidth: 500),
-                          child: ListView(
-                        padding:
-                            const EdgeInsets.fromLTRB(14, 14, 14, 24),
-                        children: <Widget>[
-                          _Esp32Card(sensors: sensors),
-                          const SizedBox(height: 14),
-                          const _SectionTitle('Environment'),
-                          _SensorGrid(sensors: sensors),
-                          const SizedBox(height: 16),
-                          const _SectionTitle('Camera'),
-                          _CameraPreview(camera: camera),
-                          const SizedBox(height: 16),
-                          _SectionTitle('Products (${products.length})'),
-                          _LatestProducts(products: products),
-                          const SizedBox(height: 16),
-                          _SectionTitle('Alerts (${alerts.length})'),
-                          _AlertSummary(alerts: alerts),
-                        ],
-                      ),
-                        ),
+                      return LayoutBuilder(
+                        builder: (BuildContext context,
+                            BoxConstraints c) {
+                          if (c.maxWidth >= 720) {
+                            return _desktopBody(
+                                sensors, camera, products, alerts);
+                          }
+                          return _phoneBody(
+                              sensors, camera, products, alerts);
+                        },
                       );
                     },
                   );
@@ -105,6 +91,100 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  /// Phone / narrow layout: a single full-width scrolling column.
+  Widget _phoneBody(SensorData sensors, CameraConfig camera,
+      List<Product> products, List<Alert> alerts) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+      children: <Widget>[
+        _Esp32Card(sensors: sensors),
+        const SizedBox(height: 14),
+        const _SectionTitle('Environment'),
+        _SensorGrid(sensors: sensors),
+        const SizedBox(height: 16),
+        const _SectionTitle('Camera'),
+        _CameraPreview(camera: camera),
+        const SizedBox(height: 16),
+        _SectionTitle('Products (${products.length})'),
+        _LatestProducts(products: products),
+        const SizedBox(height: 16),
+        _SectionTitle('Alerts (${alerts.length})'),
+        _AlertSummary(alerts: alerts),
+      ],
+    );
+  }
+
+  /// Desktop / wide layout: the status banner spans the top, then sensors
+  /// sit beside the camera, and products beside alerts — using the width
+  /// instead of a tall single column. Capped and centered on huge screens.
+  Widget _desktopBody(SensorData sensors, CameraConfig camera,
+      List<Product> products, List<Alert> alerts) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _Esp32Card(sensors: sensors),
+              const SizedBox(height: 18),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const _SectionTitle('Environment'),
+                        _SensorGrid(sensors: sensors),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const _SectionTitle('Camera'),
+                        _CameraPreview(camera: camera),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _SectionTitle('Products (${products.length})'),
+                        _LatestProducts(products: products),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _SectionTitle('Alerts (${alerts.length})'),
+                        _AlertSummary(alerts: alerts),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

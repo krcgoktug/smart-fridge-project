@@ -325,32 +325,84 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
               _testConnection();
             });
           }
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 500),
-              child: ListView(
-            padding: const EdgeInsets.all(14),
-            children: <Widget>[
-              _ipCard(),
-              const SizedBox(height: 12),
-              _statusCard(),
-              const SizedBox(height: 12),
-              _streamCard(),
-              const SizedBox(height: 12),
-              _actionButtons(),
-              const SizedBox(height: 12),
-              const _BananaCard(),
-              if (_capturedImage != null) ...<Widget>[
-                const SizedBox(height: 12),
-                _capturedCard(),
-              ],
-              const SizedBox(height: 12),
-              _helpCard(),
-            ],
-          ),
-            ),
+          return LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints c) {
+              return c.maxWidth >= 720 ? _desktopBody() : _phoneBody();
+            },
           );
         },
+      ),
+    );
+  }
+
+  /// Phone / narrow layout: a single full-width scrolling column.
+  Widget _phoneBody() {
+    return ListView(
+      padding: const EdgeInsets.all(14),
+      children: <Widget>[
+        _ipCard(),
+        const SizedBox(height: 12),
+        _statusCard(),
+        const SizedBox(height: 12),
+        _streamCard(),
+        const SizedBox(height: 12),
+        _actionButtons(),
+        const SizedBox(height: 12),
+        const _BananaCard(),
+        if (_capturedImage != null) ...<Widget>[
+          const SizedBox(height: 12),
+          _capturedCard(),
+        ],
+        const SizedBox(height: 12),
+        _helpCard(),
+      ],
+    );
+  }
+
+  /// Desktop / wide layout: two columns that use the screen width.
+  /// Left = live stream + capture/scan; right = address, status, banana
+  /// analysis and help. Capped at a comfortable max width and centered.
+  Widget _desktopBody() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1180),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                flex: 3,
+                child: Column(
+                  children: <Widget>[
+                    _streamCard(),
+                    const SizedBox(height: 14),
+                    _actionButtons(),
+                    if (_capturedImage != null) ...<Widget>[
+                      const SizedBox(height: 14),
+                      _capturedCard(),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  children: <Widget>[
+                    _ipCard(),
+                    const SizedBox(height: 14),
+                    _statusCard(),
+                    const SizedBox(height: 14),
+                    const _BananaCard(),
+                    const SizedBox(height: 14),
+                    _helpCard(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
