@@ -127,7 +127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.all(28),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1400),
+          constraints: const BoxConstraints(maxWidth: 1500),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -138,7 +138,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _SensorGrid(
                 sensors: sensors,
                 crossAxisCount: 4,
-                childAspectRatio: 1.35,
+                childAspectRatio: 1.7,
                 large: true,
               ),
               const SizedBox(height: 22),

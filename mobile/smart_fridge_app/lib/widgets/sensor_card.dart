@@ -32,33 +32,35 @@ class SensorCard extends StatelessWidget {
       elevation: 1.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: EdgeInsets.all(large ? 20 : 14),
+        padding: EdgeInsets.all(large ? 22 : 14),
         child: Column(
+          mainAxisAlignment:
+              large ? MainAxisAlignment.center : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
                 Container(
-                  padding: EdgeInsets.all(large ? 11 : 8),
+                  padding: EdgeInsets.all(large ? 12 : 8),
                   decoration: BoxDecoration(
                     color: c.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: c, size: large ? 26 : 20),
+                  child: Icon(icon, color: c, size: large ? 30 : 20),
                 ),
-                SizedBox(width: large ? 12 : 10),
+                SizedBox(width: large ? 14 : 10),
                 Expanded(
                   child: Text(
                     label,
                     style: TextStyle(
-                        fontSize: large ? 16 : 13,
+                        fontSize: large ? 18 : 13,
                         color: Colors.black54,
                         fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
             ),
-            SizedBox(height: large ? 16 : 12),
+            SizedBox(height: large ? 20 : 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
@@ -66,13 +68,13 @@ class SensorCard extends StatelessWidget {
                 Text(
                   enabled ? value : '--',
                   style: TextStyle(
-                      fontSize: large ? 38 : 24,
+                      fontSize: large ? 48 : 24,
                       fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Text(unit,
                     style: TextStyle(
-                        fontSize: large ? 16 : 13, color: Colors.black45)),
+                        fontSize: large ? 18 : 13, color: Colors.black45)),
               ],
             ),
           ],

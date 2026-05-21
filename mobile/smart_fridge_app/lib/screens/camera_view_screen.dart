@@ -367,7 +367,7 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
       padding: const EdgeInsets.all(28),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1400),
+          constraints: const BoxConstraints(maxWidth: 1500),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
