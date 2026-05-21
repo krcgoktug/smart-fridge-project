@@ -327,7 +327,7 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
           }
           return LayoutBuilder(
             builder: (BuildContext context, BoxConstraints c) {
-              return c.maxWidth >= 720 ? _desktopBody() : _phoneBody();
+              return c.maxWidth >= 720 ? _desktopBody(c) : _phoneBody();
             },
           );
         },
@@ -359,35 +359,32 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
     );
   }
 
-  /// Desktop / wide layout: two columns that use the screen width.
-  /// Left = live stream + capture/scan; right = address, status, banana
-  /// analysis and help. Capped at a comfortable max width and centered.
-  Widget _desktopBody() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1500),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                flex: 3,
-                child: Column(
-                  children: <Widget>[
-                    _streamCard(),
-                    const SizedBox(height: 14),
-                    _actionButtons(),
-                    if (_capturedImage != null) ...<Widget>[
-                      const SizedBox(height: 14),
-                      _capturedCard(),
-                    ],
-                  ],
-                ),
+  /// Desktop / wide layout: fills the whole screen. The live stream takes
+  /// all the space on the left (sized to the viewport height), with a fixed
+  /// side panel on the right for address, status, banana analysis and help.
+  Widget _desktopBody(BoxConstraints c) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: c.maxHeight - 40,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            // Left: stream fills the available height, buttons underneath.
+            Expanded(
+              child: Column(
+                children: <Widget>[
+                  Expanded(child: Center(child: _streamCard())),
+                  const SizedBox(height: 14),
+                  _actionButtons(),
+                ],
               ),
-              const SizedBox(width: 18),
-              Expanded(
-                flex: 2,
+            ),
+            const SizedBox(width: 18),
+            // Right: fixed-width side panel, scrolls if it gets tall.
+            SizedBox(
+              width: 400,
+              child: SingleChildScrollView(
                 child: Column(
                   children: <Widget>[
                     _ipCard(),
@@ -397,11 +394,15 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
                     const _BananaCard(),
                     const SizedBox(height: 14),
                     _helpCard(),
+                    if (_capturedImage != null) ...<Widget>[
+                      const SizedBox(height: 14),
+                      _capturedCard(),
+                    ],
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

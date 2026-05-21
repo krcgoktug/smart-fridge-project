@@ -124,57 +124,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _desktopBody(SensorData sensors, CameraConfig camera,
       List<Product> products, List<Alert> alerts) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(28),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1500),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _Esp32Card(sensors: sensors),
+          const SizedBox(height: 22),
+          // Sensors: a full-width row of four large cards.
+          const _SectionTitle('Environment'),
+          _SensorGrid(
+            sensors: sensors,
+            crossAxisCount: 4,
+            childAspectRatio: 2.2,
+            large: true,
+          ),
+          const SizedBox(height: 22),
+          // Camera on the left, products + alerts stacked on the right.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _Esp32Card(sensors: sensors),
-              const SizedBox(height: 22),
-              // Sensors get a full-width row of four large cards.
-              const _SectionTitle('Environment'),
-              _SensorGrid(
-                sensors: sensors,
-                crossAxisCount: 4,
-                childAspectRatio: 1.7,
-                large: true,
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const _SectionTitle('Camera'),
+                    _CameraPreview(camera: camera),
+                  ],
+                ),
               ),
-              const SizedBox(height: 22),
-              // Camera on the left, products + alerts stacked on the right.
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
-                    flex: 3,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const _SectionTitle('Camera'),
-                        _CameraPreview(camera: camera),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 22),
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        _SectionTitle('Products (${products.length})'),
-                        _LatestProducts(products: products),
-                        const SizedBox(height: 16),
-                        _SectionTitle('Alerts (${alerts.length})'),
-                        _AlertSummary(alerts: alerts),
-                      ],
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 22),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _SectionTitle('Products (${products.length})'),
+                    _LatestProducts(products: products),
+                    const SizedBox(height: 16),
+                    _SectionTitle('Alerts (${alerts.length})'),
+                    _AlertSummary(alerts: alerts),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
