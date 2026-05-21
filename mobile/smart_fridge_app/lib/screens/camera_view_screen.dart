@@ -364,10 +364,10 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
   /// analysis and help. Capped at a comfortable max width and centered.
   Widget _desktopBody() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(28),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
+          constraints: const BoxConstraints(maxWidth: 1400),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[

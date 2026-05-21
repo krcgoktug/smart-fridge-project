@@ -10,6 +10,7 @@ class SensorCard extends StatelessWidget {
     required this.unit,
     required this.color,
     this.enabled = true,
+    this.large = false,
   });
 
   final IconData icon;
@@ -21,6 +22,9 @@ class SensorCard extends StatelessWidget {
   /// When false the card is dimmed (e.g. the ESP32 is offline).
   final bool enabled;
 
+  /// Bigger typography / spacing for the wide desktop layout.
+  final bool large;
+
   @override
   Widget build(BuildContext context) {
     final Color c = enabled ? color : Colors.grey;
@@ -28,46 +32,47 @@ class SensorCard extends StatelessWidget {
       elevation: 1.5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(large ? 20 : 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(large ? 11 : 8),
                   decoration: BoxDecoration(
                     color: c.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: c, size: 20),
+                  child: Icon(icon, color: c, size: large ? 26 : 20),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: large ? 12 : 10),
                 Expanded(
                   child: Text(
                     label,
-                    style: const TextStyle(
-                        fontSize: 13,
+                    style: TextStyle(
+                        fontSize: large ? 16 : 13,
                         color: Colors.black54,
                         fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: large ? 16 : 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: <Widget>[
                 Text(
                   enabled ? value : '--',
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: large ? 38 : 24,
+                      fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 4),
                 Text(unit,
-                    style: const TextStyle(
-                        fontSize: 13, color: Colors.black45)),
+                    style: TextStyle(
+                        fontSize: large ? 16 : 13, color: Colors.black45)),
               ],
             ),
           ],

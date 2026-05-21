@@ -124,29 +124,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _desktopBody(SensorData sensors, CameraConfig camera,
       List<Product> products, List<Alert> alerts) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(28),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
+          constraints: const BoxConstraints(maxWidth: 1400),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               _Esp32Card(sensors: sensors),
-              const SizedBox(height: 18),
+              const SizedBox(height: 22),
+              // Sensors get a full-width row of four large cards.
+              const _SectionTitle('Environment'),
+              _SensorGrid(
+                sensors: sensors,
+                crossAxisCount: 4,
+                childAspectRatio: 1.35,
+                large: true,
+              ),
+              const SizedBox(height: 22),
+              // Camera on the left, products + alerts stacked on the right.
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        const _SectionTitle('Environment'),
-                        _SensorGrid(sensors: sensors),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
+                    flex: 3,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
@@ -155,26 +156,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
+                  const SizedBox(width: 22),
                   Expanded(
+                    flex: 2,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         _SectionTitle('Products (${products.length})'),
                         _LatestProducts(products: products),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
+                        const SizedBox(height: 16),
                         _SectionTitle('Alerts (${alerts.length})'),
                         _AlertSummary(alerts: alerts),
                       ],
@@ -263,19 +253,28 @@ class _Esp32Card extends StatelessWidget {
 }
 
 class _SensorGrid extends StatelessWidget {
-  const _SensorGrid({required this.sensors});
+  const _SensorGrid({
+    required this.sensors,
+    this.crossAxisCount = 2,
+    this.childAspectRatio = 1.55,
+    this.large = false,
+  });
   final SensorData sensors;
+  final int crossAxisCount;
+  final double childAspectRatio;
+  final bool large;
 
   @override
   Widget build(BuildContext context) {
     final bool on = sensors.isOnline;
+    final double gap = large ? 14 : 10;
     return GridView.count(
-      crossAxisCount: 2,
+      crossAxisCount: crossAxisCount,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      childAspectRatio: 1.55,
+      crossAxisSpacing: gap,
+      mainAxisSpacing: gap,
+      childAspectRatio: childAspectRatio,
       children: <Widget>[
         SensorCard(
           icon: Icons.thermostat,
@@ -284,6 +283,7 @@ class _SensorGrid extends StatelessWidget {
           unit: '°C',
           color: const Color(0xFF1976D2),
           enabled: on,
+          large: large,
         ),
         SensorCard(
           icon: Icons.water_drop,
@@ -292,6 +292,7 @@ class _SensorGrid extends StatelessWidget {
           unit: '%',
           color: const Color(0xFF0097A7),
           enabled: on,
+          large: large,
         ),
         SensorCard(
           icon: Icons.air,
@@ -300,6 +301,7 @@ class _SensorGrid extends StatelessWidget {
           unit: 'adc',
           color: const Color(0xFF7B1FA2),
           enabled: on,
+          large: large,
         ),
         SensorCard(
           icon: Icons.scale,
@@ -308,6 +310,7 @@ class _SensorGrid extends StatelessWidget {
           unit: 'g',
           color: const Color(0xFF5D4037),
           enabled: on,
+          large: large,
         ),
       ],
     );
