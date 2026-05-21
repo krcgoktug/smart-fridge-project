@@ -40,8 +40,12 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
   // Auto-scan: periodically pull a frame, decode QR, register on success.
   Timer? _autoScanTimer;
   bool _autoScanning = false;
-  String? _lastAutoRegisteredId;
-  DateTime _lastAutoRegisteredAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // Product IDs already registered this session. Each QR sticker in the box
+  // is read exactly once; re-seeing it on later frames is ignored so we
+  // don't spam saves/snackbars. (Saves are idempotent anyway since the
+  // productId is the storage key.)
+  final Set<String> _registeredQrIds = <String>{};
 
   // Auto-add a "Banana (visual)" product whenever the camera sees a banana.
   // We only re-save when the freshness status changes, to avoid spamming the
@@ -160,29 +164,43 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
       );
       return;
     }
-    final String? qr = CameraService.decodeQr(bytes);
+    final Set<String> codes = CameraService.decodeQrCodes(bytes);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _capturedImage = bytes;
       _online = true;
     });
-    if (qr == null) {
+    if (codes.isEmpty) {
       _snack('No QR code found in the camera frame.', StatusColors.warning);
       return;
     }
-    final Product? product = _parseProduct(qr);
-    if (product == null) {
-      _snack('QR code is not a valid product code.', StatusColors.danger);
-      return;
+    int added = 0;
+    int skipped = 0;
+    for (final String qr in codes) {
+      final Product? product = _parseProduct(qr);
+      if (product == null) continue;
+      if (_registeredQrIds.contains(product.productId)) {
+        skipped++;
+        continue;
+      }
+      await FirebaseService.saveProduct(product);
+      _registeredQrIds.add(product.productId);
+      added++;
     }
-    await FirebaseService.saveProduct(product);
-    _snack('${product.name} registered from QR code.', StatusColors.fresh);
+    if (added == 0 && skipped == 0) {
+      _snack('QR code is not a valid product code.', StatusColors.danger);
+    } else if (added == 0) {
+      _snack('Already registered ($skipped).', StatusColors.warning);
+    } else {
+      _snack('Registered $added product(s) from QR.', StatusColors.fresh);
+    }
   }
 
-  /// Silent periodic QR scan: no error popups, only a success snackbar when
-  /// a *new* product is registered. De-duplicates re-scans of the same QR
-  /// within 8 s so the user doesn't see endless toasts.
+  /// Silent periodic scan that runs BOTH jobs on the same captured frame:
+  ///   1. banana browning colour analysis (every cycle)
+  ///   2. multi-QR registration — every distinct sticker in the box is read
+  ///      once. No error popups; one success snackbar per newly added item.
   Future<void> _autoScanTick() async {
     if (_autoScanning || _busy || _testing) return;
     if (_activeIp.isEmpty) return;
@@ -196,24 +214,19 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
       final BananaAnalysis banana =
           BananaAnalysisService.analyzeBytes(bytes);
       BananaState.update(banana);
-
-      // 1b) Auto-add / refresh the banana product when we see one.
       await _upsertBananaProduct(banana);
 
-      // 2) QR scan (only if a QR is visible).
-      final String? qr = CameraService.decodeQr(bytes);
-      if (qr == null) return;
-      final Product? product = _parseProduct(qr);
-      if (product == null) return;
-      if (product.productId == _lastAutoRegisteredId &&
-          DateTime.now().difference(_lastAutoRegisteredAt).inSeconds < 8) {
-        return;
-      }
-      await FirebaseService.saveProduct(product);
-      _lastAutoRegisteredId = product.productId;
-      _lastAutoRegisteredAt = DateTime.now();
-      if (mounted) {
-        _snack('Auto-registered: ${product.name}', StatusColors.fresh);
+      // 2) Multi-QR scan: register each NEW product exactly once.
+      final Set<String> codes = CameraService.decodeQrCodes(bytes);
+      for (final String qr in codes) {
+        final Product? product = _parseProduct(qr);
+        if (product == null) continue;
+        if (_registeredQrIds.contains(product.productId)) continue;
+        await FirebaseService.saveProduct(product);
+        _registeredQrIds.add(product.productId);
+        if (mounted) {
+          _snack('Added: ${product.name}', StatusColors.fresh);
+        }
       }
     } catch (_) {
       // ignore; auto-scan is best-effort
