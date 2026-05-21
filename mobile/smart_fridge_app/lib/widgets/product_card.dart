@@ -6,9 +6,13 @@ import 'status_badge.dart';
 
 /// A card representing one product in the Products list.
 class ProductCard extends StatelessWidget {
-  const ProductCard({super.key, required this.product});
+  const ProductCard({super.key, required this.product, this.onDelete});
 
   final Product product;
+
+  /// When provided, a trash-can button is shown that removes the product
+  /// from the system. Omitted on read-only summaries (e.g. the Dashboard).
+  final VoidCallback? onDelete;
 
   IconData _categoryIcon(String category) {
     switch (category.toLowerCase()) {
@@ -76,6 +80,16 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             StatusBadge(label: status, color: color, compact: true),
+            if (onDelete != null) ...<Widget>[
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline),
+                color: StatusColors.danger,
+                tooltip: 'Remove from fridge',
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ],
         ),
       ),

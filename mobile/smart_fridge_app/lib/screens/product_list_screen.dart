@@ -9,6 +9,30 @@ import '../widgets/product_card.dart';
 class ProductListScreen extends StatelessWidget {
   const ProductListScreen({super.key});
 
+  /// Asks the user to confirm removing a product. Returns true if confirmed.
+  static Future<bool> _confirmRemove(BuildContext context, Product p) async {
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext ctx) => AlertDialog(
+        title: const Text('Remove product?'),
+        content: Text('"${p.name}" will be removed from the fridge.'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: StatusColors.danger),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,9 +62,16 @@ class ProductListScreen extends StatelessWidget {
                   ),
                   child: const Icon(Icons.delete, color: Colors.white),
                 ),
+                confirmDismiss: (_) => _confirmRemove(context, p),
                 onDismissed: (_) =>
                     FirebaseService.deleteProduct(p.productId),
-                child: ProductCard(product: p),
+                child: ProductCard(
+                  product: p,
+                  onDelete: () async {
+                    final bool ok = await _confirmRemove(context, p);
+                    if (ok) await FirebaseService.deleteProduct(p.productId);
+                  },
+                ),
               );
             },
           );
