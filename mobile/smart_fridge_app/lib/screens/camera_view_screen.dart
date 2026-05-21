@@ -325,7 +325,10 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
               _testConnection();
             });
           }
-          return ListView(
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: ListView(
             padding: const EdgeInsets.all(14),
             children: <Widget>[
               _ipCard(),
@@ -344,6 +347,8 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
               const SizedBox(height: 12),
               _helpCard(),
             ],
+          ),
+            ),
           );
         },
       ),

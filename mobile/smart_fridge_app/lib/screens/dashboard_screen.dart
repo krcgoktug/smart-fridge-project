@@ -73,7 +73,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         products: products,
                         banana: banana,
                       );
-                      return ListView(
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints:
+                              const BoxConstraints(maxWidth: 500),
+                          child: ListView(
                         padding:
                             const EdgeInsets.fromLTRB(14, 14, 14, 24),
                         children: <Widget>[
@@ -91,6 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           _SectionTitle('Alerts (${alerts.length})'),
                           _AlertSummary(alerts: alerts),
                         ],
+                      ),
+                        ),
                       );
                     },
                   );
