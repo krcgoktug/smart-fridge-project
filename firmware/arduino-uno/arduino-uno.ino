@@ -24,7 +24,14 @@ HX711 scale;
 // ===================== SETTINGS =====================
 const int SAMPLE_COUNT = 30;
 int mq135Baseline = 0;
-float calibration_factor = 420.5;   // negatif gelirse -420.5 dene
+
+// HX711 calibration tuned against known masses on the real rig.
+// Readings under ~100 g are unreliable, so use a heavy item
+// (yogurt / milk) for the demo.
+float calibration_factor = 20.72530;
+float zero_threshold = 50.0;     // below this many grams -> treat as 0
+float lastStableWeight = 0;      // used to reject sudden nonsense spikes
+
 unsigned long lastReadTime = 0;
 const unsigned long READ_INTERVAL = 2000;
 
@@ -102,10 +109,16 @@ int readMQ135Filtered() {
 }
 
 // ===================== HX711 READ =====================
+// Mirrors the validated standalone load-cell sketch: average of 20
+// samples, NaN/inf guard, sub-threshold values snapped to 0, and a
+// spike rejector that keeps the last stable reading.
 float readWeight() {
   if (!scale.is_ready()) return -999;
-  float w = scale.get_units(10);
-  if (abs(w) < 2.0) w = 0;
+  float w = scale.get_units(20);
+  if (isnan(w) || isinf(w)) return lastStableWeight;
+  if (abs(w) < zero_threshold) w = 0;
+  if (abs(w - lastStableWeight) > 30000) w = lastStableWeight;
+  lastStableWeight = w;
   return w;
 }
 
@@ -157,6 +170,7 @@ void loop() {
     char cmd = Serial.read();
     if (cmd == 't' || cmd == 'T') {
       scale.tare();
+      lastStableWeight = 0;
       Serial.println(F(">> Dara yeniden alindi <<"));
     }
     if (cmd == 'l' || cmd == 'L') {
