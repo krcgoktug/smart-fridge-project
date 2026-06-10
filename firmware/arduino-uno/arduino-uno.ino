@@ -3,7 +3,8 @@
 // =====================================================================
 //  DHT11 DATA -> D3 | MQ135 AOUT -> A0 | HX711 DT -> D4, SCK -> D5 | LED -> D9
 //  Libraries: "DHT sensor library" (Adafruit) + "HX711 Arduino Library" (Bogdan Necula)
-//  Serial: 9600 baud. Commands: t/T = re-tare, l/L = LED toggle.
+//  Serial: 9600 baud. Commands: t/T = re-tare. LED stays on while the
+//  board is powered (system-on indicator on D9).
 // =====================================================================
 
 #include <DHT.h>
@@ -23,14 +24,27 @@ HX711 scale;
 
 // ===================== SETTINGS =====================
 const int SAMPLE_COUNT = 30;
-int mq135Baseline = 0;
-
-// HX711 calibration tuned against known masses on the real rig.
-// Readings under ~100 g are unreliable, so use a heavy item
-// (yogurt / milk) for the demo.
-float calibration_factor = 20.72530;
-float zero_threshold = 50.0;     // below this many grams -> treat as 0
+int mq135Baseline = 0;            
+// HX711 calibration factor for THIS rig (4 load cells under a piece of
+// cardboard). Computed once with the separate calibration sketch in
+// firmware/arduino-uno-calibration/. Don't re-derive it at runtime — the
+// factor is a property of the hardware and stays constant; only the zero
+// point drifts (and we handle that below).
+float calibration_factor = 20.626;
+float zero_threshold = 0.0;      // 0 = let small positive readings show
+                                 // through (sub-50 g items become visible);
+                                 // negative readings are still clamped to 0
 float lastStableWeight = 0;      // used to reject sudden nonsense spikes
+
+// Soft drift compensation. The HX711's zero point creeps over time due
+// to temperature and load-cell creep. We keep a software offset that
+// slowly absorbs NEGATIVE drift (a real load can never make the scale
+// read negative, so a sub-zero reading is drift by definition). Pressing
+// the in-app Tare button resets this immediately.
+float baselineDrift = 0.0;
+const float DRIFT_NEG_LIMIT = -500.0;  // skip auto-zero if drift exceeds this
+const float DRIFT_ABSORB    = 0.05;    // fraction of each negative reading
+                                       // folded into the offset per cycle
 
 unsigned long lastReadTime = 0;
 const unsigned long READ_INTERVAL = 2000;
@@ -52,11 +66,16 @@ int getMedian(int arr[], int size) {
 }
 
 // ===================== MQ135 BASELINE =====================
-int calculateMQ135Baseline() {
+// warmupMs lets the caller pick: long wait at boot (sensor heater needs
+// time to reach steady state), short wait when the user re-baselines
+// later with the 'g' command (sensor already warm).
+int calculateMQ135Baseline(unsigned long warmupMs) {
   long total = 0;
-  Serial.println(F("MQ135 baseline aliniyor..."));
-  Serial.println(F("Lutfen sensoru temiz ortamda 5 saniye bekletin."));
-  delay(5000);
+  Serial.print(F("MQ135 baseline aliniyor ("));
+  Serial.print(warmupMs / 1000);
+  Serial.println(F(" sn warm-up)..."));
+  Serial.println(F("Lutfen sensoru TEMIZ HAVADA tutun."));
+  delay(warmupMs);
   for (int i = 0; i < 100; i++) {
     total += analogRead(MQ135_PIN);
     delay(50);
@@ -104,7 +123,13 @@ int readMQ135Filtered() {
   for (int i = 0; i < SAMPLE_COUNT; i++) gasTotal += samples[i];
   int averageValue = gasTotal / SAMPLE_COUNT;
   int gasValue     = (medianValue + averageValue) / 2;
-  int sensitive    = mq135Baseline + ((gasValue - mq135Baseline) * 3);
+  // This MQ135 module is wired so the AO voltage DROPS when gas is
+  // present (more gas -> lower Rs -> lower divider output). Flip the
+  // sign so the displayed value INCREASES with gas concentration, the
+  // way the dashboard and the risk score expect.
+  long delta = (long)mq135Baseline - (long)gasValue;   // +ve when gas detected
+  if (delta < 0) delta = 0;                            // ignore sub-baseline noise
+  int sensitive = (int)(mq135Baseline + delta * 3L);
   return sensitive;
 }
 
@@ -114,11 +139,28 @@ int readMQ135Filtered() {
 // spike rejector that keeps the last stable reading.
 float readWeight() {
   if (!scale.is_ready()) return -999;
-  float w = scale.get_units(20);
-  if (isnan(w) || isinf(w)) return lastStableWeight;
-  if (abs(w) < zero_threshold) w = 0;
+  float raw = scale.get_units(20);
+  if (isnan(raw) || isinf(raw)) raw = lastStableWeight + baselineDrift;
+
+  // Apply the software drift offset so the value the rest of the sketch
+  // sees is the "true" weight above the moving baseline.
+  float w = raw - baselineDrift;
+
   if (abs(w - lastStableWeight) > 30000) w = lastStableWeight;
+
+  // Slowly absorb NEGATIVE drift into the offset. We never absorb
+  // positive readings, so a real load on the scale is left alone — the
+  // 5 kg you place stays 5 kg even if the baseline has drifted under it.
+  // Extreme drift (< -500 g) is left for the user to fix with the Tare
+  // button so we don't slow-track huge offsets.
+  if (w < 0 && w > DRIFT_NEG_LIMIT) {
+    baselineDrift += w * DRIFT_ABSORB;
+  }
+
   lastStableWeight = w;
+
+  if (abs(w) < zero_threshold) w = 0;
+  if (w < 0) w = 0;            // never report negative grams
   return w;
 }
 
@@ -129,6 +171,9 @@ int calculateRiskScore(float temperature, float humidity, int gasValue) {
   else if (temperature > 25) risk += 10;
   if      (humidity > 80)    risk += 20;
   else if (humidity > 65)    risk += 10;
+  // gasValue here is already the corrected/inverted "display value" from
+  // readMQ135Filtered, which goes UP when gas is present. So the diff
+  // above baseline is positive in that case.
   int gasDiff = gasValue - mq135Baseline;
   if      (gasDiff > 250)    risk += 40;
   else if (gasDiff > 120)    risk += 20;
@@ -142,7 +187,9 @@ int calculateRiskScore(float temperature, float humidity, int gasValue) {
 void setup() {
   Serial.begin(9600);
   pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  // LED is a simple power/status indicator: stays ON as long as the
+  // board has power. No risk-based blinking.
+  digitalWrite(LED_PIN, HIGH);
 
   dht.begin();
   scale.begin(HX711_DT_PIN, HX711_SCK_PIN);
@@ -155,12 +202,12 @@ void setup() {
   scale.tare();
   Serial.println(F("Dara alindi."));
 
-  mq135Baseline = calculateMQ135Baseline();
+  // 20-second warmup gives the MQ135's heater enough time to reach
+  // steady state before we record what "clean air" looks like.
+  mq135Baseline = calculateMQ135Baseline(20000);
 
   Serial.println(F("Sistem hazir."));
-  Serial.println(F("Komutlar:"));
-  Serial.println(F("  t/T = HX711 dara al"));
-  Serial.println(F("  l/L = LED ac/kapat test"));
+  Serial.println(F("Komutlar:  t/T = HX711 dara al, g/G = MQ135 baseline yenile"));
   Serial.println();
 }
 
@@ -171,12 +218,16 @@ void loop() {
     if (cmd == 't' || cmd == 'T') {
       scale.tare();
       lastStableWeight = 0;
+      baselineDrift = 0;            // hard reset of the soft offset too
       Serial.println(F(">> Dara yeniden alindi <<"));
     }
-    if (cmd == 'l' || cmd == 'L') {
-      digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-      Serial.print(F(">> LED durumu: "));
-      Serial.println(digitalRead(LED_PIN) ? F("ON") : F("OFF"));
+    if (cmd == 'g' || cmd == 'G') {
+      // Re-baseline the gas sensor. Sensor is already warm at runtime,
+      // so a short 2-second sample is enough. User MUST hold clean air
+      // around the sensor before issuing this command.
+      Serial.println(F(">> MQ135 baseline yenileniyor (temiz havada bekle) <<"));
+      mq135Baseline = calculateMQ135Baseline(2000);
+      Serial.println(F(">> MQ135 baseline yenilendi <<"));
     }
   }
 
@@ -191,7 +242,8 @@ void loop() {
   float weight      = readWeight();
   int   riskScore   = dhtOk ? calculateRiskScore(temperature, humidity, gasValue) : 0;
 
-  digitalWrite(LED_PIN, riskScore >= 70 ? HIGH : LOW);
+  // LED stays ON the entire time (set HIGH once in setup); no risk-based
+  // toggle. Risk score is still emitted via JSON for the app.
 
   Serial.println(F("===== SENSOR DATA ====="));
   if (dhtOk) {

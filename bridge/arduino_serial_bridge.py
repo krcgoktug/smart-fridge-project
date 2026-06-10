@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import sys
 import threading
 import time
@@ -44,6 +45,13 @@ except ImportError:
     print("ERROR: pyserial is not installed. Run:  pip install pyserial",
           file=sys.stderr)
     sys.exit(1)
+
+
+# Outgoing commands the HTTP layer queues for the serial reader thread to
+# write back to the Arduino (e.g. "t\n" to re-tare the HX711). Reads and
+# writes share one Serial connection, so the reader drains this queue at
+# the start of each loop iteration.
+CMD_QUEUE: "queue.Queue[str]" = queue.Queue()
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +119,18 @@ def serial_reader_loop(port: str, baud: int) -> None:
                 ser.reset_input_buffer()
                 print(f"[serial] {port} connected, listening for JSON lines")
                 while True:
+                    # Drain any commands the HTTP layer queued for us
+                    # (e.g. "t\n" to re-tare the load cell).
+                    while True:
+                        try:
+                            cmd = CMD_QUEUE.get_nowait()
+                        except queue.Empty:
+                            break
+                        try:
+                            ser.write(cmd.encode("utf-8"))
+                            print(f"[serial] -> Arduino: {cmd!r}")
+                        except Exception as exw:
+                            print(f"[serial] write failed: {exw}")
                     raw = ser.readline()
                     if not raw:
                         continue
@@ -138,7 +158,7 @@ class SensorHandler(BaseHTTPRequestHandler):
 
     def _send_cors(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Cache-Control", "no-store")
 
@@ -160,6 +180,34 @@ class SensorHandler(BaseHTTPRequestHandler):
         self._send_cors()
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path.rstrip("/")
+        cmd_for_path = {
+            # /tare : queue a "t\n" command for the Arduino so the app can
+            # re-zero the load cells from a button instead of needing the
+            # Serial Monitor.
+            "/tare": ("t\n", "tare"),
+            # /recalibrate_gas : re-take the MQ135 baseline at runtime
+            # (sensor must be in CLEAN air when this is called).
+            "/recalibrate_gas": ("g\n", "recalibrate_gas"),
+        }
+        if path in cmd_for_path:
+            cmd, label = cmd_for_path[path]
+            CMD_QUEUE.put(cmd)
+            body = (
+                '{"ok":true,"queued":"' + label + '"}'
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self._send_cors()
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(404)
+        self._send_cors()
+        self.end_headers()
 
 
 def run_http(port: int) -> None:
