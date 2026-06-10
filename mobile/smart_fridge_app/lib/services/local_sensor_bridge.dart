@@ -17,8 +17,15 @@ class LocalSensorBridge {
 
   static const Duration _pollInterval = Duration(seconds: 2);
   static const Duration _httpTimeout = Duration(seconds: 2);
+  static const String _localhostFallback = 'http://localhost:8787';
 
   /// Returns a stream of live sensor readings polled from [baseUrl].
+  ///
+  /// On every tick it first tries the configured URL; if that fails (e.g.
+  /// the user kept a stale LAN IP in Settings after their laptop got a new
+  /// DHCP address), it transparently falls back to `http://localhost:8787`
+  /// so the app keeps working when the bridge runs on the same machine as
+  /// the browser.
   static Stream<SensorData> stream(String baseUrl) {
     final String url = _normalize(baseUrl);
     if (url.isEmpty) {
@@ -27,21 +34,51 @@ class LocalSensorBridge {
 
     late final StreamController<SensorData> ctrl;
     Timer? timer;
+    bool busy = false;
+    // After the first successful poll we stick to whichever URL worked,
+    // so a stale configured URL doesn't cost a 2 s timeout on every
+    // cycle. Reset to null on a hard failure so we re-probe.
+    String? stickyHost;
 
-    Future<void> poll() async {
+    Future<bool> tryFetch(String base) async {
       try {
         final http.Response r = await http
-            .get(Uri.parse('$url/sensors'))
+            .get(Uri.parse('$base/sensors'))
             .timeout(_httpTimeout);
-        if (r.statusCode != 200) return;
+        if (r.statusCode != 200) return false;
         final dynamic decoded = jsonDecode(r.body);
-        if (decoded is! Map) return;
+        if (decoded is! Map) return false;
         ctrl.add(SensorData.fromMap(
           decoded.map((dynamic k, dynamic v) => MapEntry(k.toString(), v)),
         ));
+        return true;
       } catch (_) {
-        // bridge unreachable - keep the previous "online" state until the
-        // 60 s timeout in SensorData.isOnline expires
+        return false;
+      }
+    }
+
+    Future<void> poll() async {
+      // Don't overlap polls (a stalled request must not pile up new ones).
+      if (busy) return;
+      busy = true;
+      try {
+        // Fast path: keep using the URL we already know works.
+        if (stickyHost != null) {
+          if (await tryFetch(stickyHost!)) return;
+          stickyHost = null; // it died; re-probe below
+        }
+        // Probe: configured URL first, localhost as the safety net.
+        if (await tryFetch(url)) {
+          stickyHost = url;
+          return;
+        }
+        if (url != _localhostFallback) {
+          if (await tryFetch(_localhostFallback)) {
+            stickyHost = _localhostFallback;
+          }
+        }
+      } finally {
+        busy = false;
       }
     }
 
@@ -58,6 +95,30 @@ class LocalSensorBridge {
       },
     );
     return ctrl.stream;
+  }
+
+  /// Tells the Python bridge to send a "t" command to the Arduino, which
+  /// re-tares the HX711 load cell to zero. Falls back to localhost if the
+  /// configured URL doesn't answer (same logic as the sensor stream).
+  /// Returns true when the bridge accepted the command.
+  static Future<bool> tare(String baseUrl) async {
+    final String url = _normalize(baseUrl);
+    Future<bool> tryOne(String base) async {
+      if (base.isEmpty) return false;
+      try {
+        final http.Response r = await http
+            .post(Uri.parse('$base/tare'))
+            .timeout(_httpTimeout);
+        return r.statusCode == 200;
+      } catch (_) {
+        return false;
+      }
+    }
+    if (await tryOne(url)) return true;
+    if (url != _localhostFallback) {
+      return tryOne(_localhostFallback);
+    }
+    return false;
   }
 
   static String _normalize(String s) {

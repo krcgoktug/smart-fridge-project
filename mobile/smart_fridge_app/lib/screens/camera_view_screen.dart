@@ -60,9 +60,11 @@ class _CameraViewScreenState extends State<CameraViewScreen> {
     if (_activeIp.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _testConnection());
     }
-    // Auto-scan every 1.5 s while the screen is open.
+    // Auto-scan every 3 s while the screen is open. Kept gentle so its
+    // /capture requests don't compete with the live-stream frames and
+    // overwhelm the single-task ESP32-CAM.
     _autoScanTimer = Timer.periodic(
-      const Duration(milliseconds: 1500),
+      const Duration(milliseconds: 3000),
       (_) => _autoScanTick(),
     );
   }

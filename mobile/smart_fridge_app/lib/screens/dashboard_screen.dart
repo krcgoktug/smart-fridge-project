@@ -9,6 +9,8 @@ import '../models/sensor_data.dart';
 import '../services/alert_service.dart';
 import '../services/banana_state.dart';
 import '../services/firebase_service.dart';
+import '../services/local_sensor_bridge.dart';
+import '../services/settings_service.dart';
 import '../utils/status_colors.dart';
 import '../widgets/product_card.dart';
 import '../widgets/sensor_card.dart';
@@ -38,6 +40,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _refresh?.cancel();
     super.dispose();
+  }
+
+  /// Asks the Python bridge to re-tare the HX711 (zero the load cells)
+  /// without needing the Serial Monitor. Used to recover from baseline
+  /// drift mid-demo.
+  Future<void> _tareScale() async {
+    final bool ok =
+        await LocalSensorBridge.tare(SettingsService.sensorBridgeUrl);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(ok
+            ? 'Re-tare command sent — empty the scale and wait ~2 s.'
+            : 'Could not reach the bridge.'),
+        backgroundColor: ok ? StatusColors.fresh : StatusColors.danger,
+      ));
   }
 
   @override
@@ -91,6 +110,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 14),
         const _SectionTitle('Environment'),
         _SensorGrid(sensors: sensors),
+        const SizedBox(height: 10),
+        _TareRow(onTare: _tareScale),
         const SizedBox(height: 16),
         _SectionTitle('Products (${products.length})'),
         _LatestProducts(products: products),
@@ -121,6 +142,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             childAspectRatio: 2.4,
             large: true,
           ),
+          const SizedBox(height: 12),
+          _TareRow(onTare: _tareScale),
           const SizedBox(height: 18),
           // Products and alerts fill the rest of the height side by side.
           Expanded(
@@ -159,6 +182,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Small action strip under the sensor grid that lets the user re-zero the
+/// load cells from the app (no Serial Monitor needed). HX711 baseline drift
+/// is unavoidable; this is the way to recover during a demo.
+class _TareRow extends StatelessWidget {
+  const _TareRow({required this.onTare});
+  final VoidCallback onTare;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: <Widget>[
+        OutlinedButton.icon(
+          onPressed: onTare,
+          icon: const Icon(Icons.exposure_zero, size: 18),
+          label: const Text('Tare scale (zero load cells)'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: StatusColors.fresh,
+            side: const BorderSide(color: StatusColors.fresh),
+          ),
+        ),
+      ],
     );
   }
 }
