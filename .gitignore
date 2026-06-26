@@ -1,3 +1,7 @@
+# ---- Runtime logs (serve_local.py / bridge background runs) ----
+*.log
+*.err
+
 # ---- Secrets / config ----
 *.env
 .env
