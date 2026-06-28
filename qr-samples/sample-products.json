@@ -1,0 +1,25 @@
+{
+  "products": [
+    {
+      "productId": "milk_001",
+      "name": "Milk",
+      "category": "Dairy",
+      "addedDate": "2026-06-01",
+      "expiryDate": "2026-06-14"
+    },
+    {
+      "productId": "banana_001",
+      "name": "Banana",
+      "category": "Fruit",
+      "addedDate": "2026-06-03",
+      "expiryDate": "2026-06-10"
+    },
+    {
+      "productId": "yogurt_001",
+      "name": "Yogurt",
+      "category": "Dairy",
+      "addedDate": "2026-06-02",
+      "expiryDate": "2026-06-12"
+    }
+  ]
+}

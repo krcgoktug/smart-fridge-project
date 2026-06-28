@@ -1,0 +1,35 @@
+{
+  "devices": {
+    "fridge_01": {
+      "sensors": {
+        "temperature": 0,
+        "humidity": 0,
+        "gasValue": 0,
+        "weight": 0,
+        "updatedAt": 0
+      },
+      "camera": {
+        "streamUrl": "",
+        "captureUrl": ""
+      },
+      "products": {
+        "product_id_example": {
+          "name": "",
+          "category": "",
+          "addedDate": "",
+          "expiryDate": "",
+          "riskScore": 0,
+          "status": "fresh"
+        }
+      },
+      "alerts": {
+        "alert_id_example": {
+          "productId": "",
+          "type": "expiring_soon",
+          "message": "",
+          "createdAt": 0
+        }
+      }
+    }
+  }
+}
