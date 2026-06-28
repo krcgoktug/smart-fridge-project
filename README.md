@@ -1,6 +1,6 @@
 # Smart Fridge — Load Cell Calibration
 
-> **YAPANLAR:** Sıla Özgel · Göktuğ Karaca · Ezgi Erdoğan
+> Sıla Özgel · Göktuğ Karaca · Ezgi Erdoğan
 
 Bir buzdolabı / saklama kabı projesi için HX711 yük hücresi (load cell)
 kalibrasyon sketch'i. Bilinen bir ağırlık yardımıyla doğru
