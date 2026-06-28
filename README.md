@@ -1,11 +1,19 @@
 # Zero Waste Smart Fridge
 
+<div align="center">
+
+## 👥 Yapanlar / Developers
+
+# 🌱 Sıla Özgel  ·  Göktuğ Karaca  ·  Ezgi Erdoğan 🌱
+
+</div>
+
+---
+
 An IoT-based smart food monitoring system that helps reduce household food waste.
 The system tracks products stored inside a transparent plastic box, estimates a
 relative **spoilage risk score** for each item, and warns the user before food
 goes bad.
-
-> Sıla Özgel · Göktuğ Karaca · Ezgi Erdoğan
 
 > University microcontroller project — built around ESP32, Firebase Realtime
 > Database and a Flutter mobile app.
